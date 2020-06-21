@@ -1,4 +1,5 @@
 import pygame
+from pygame.locals import *
 
 pygame.init()
 
@@ -8,31 +9,52 @@ def mean(array):
         total += v
     return total/len(array)
 
-def set_screen(screen):
-    Form.screen = screen
-    TextBox.screen = screen
-    Button.screen = screen
-    InputText.screen = screen
-    Cadre.screen = screen
-    Interface.screen = screen
-
-def set_dimfactor(factor):
-    Dimension.f = factor
-
-
 class Dimension:
     f = 1
-    def __init__(self, dim):
-        self.window = dim
+    def __init__(self, dim, f):
+        self.f = f
+        self.WINDOW = dim # original dim: CONST!
+        
+        # unscaled
         self.center_x = int(dim[0]/2)
         self.center_y = int(dim[1]/2)
         self.center = (self.center_x, self.center_y)
         self.x = dim[0]
         self.y = dim[1]
+    
+    @property
+    def rx(self):
+        '''Scaled x dimension'''
+        return self.E(self.WINDOW[0])
+    
+    @property
+    def ry(self):
+        '''Scaled y dimension'''
+        return self.E(self.WINDOW[1])
 
-E = lambda x: int(x * Dimension.f)
+    @property
+    def size(self):
+        '''Scaled dimension of the window'''
+        return self.scale(self.WINDOW)
 
-screen = None
+    def scale(self, x, factor = None):
+        
+        if factor:
+            f = factor
+        else:
+            f = self.f
+
+        if type(x) == list or type(x) == tuple:
+            x = list(x)
+            for i in range(len(x)):
+                x[i] = int(x[i]*f)
+        else:
+            x = int(x*f)
+        return x
+
+    def E(self, x):
+        return round(x*self.f)
+
 fontname = 'Arial'
 font_factor = 1
 
@@ -55,40 +77,38 @@ class C:
     LIGHT_PURPLE = (210, 87, 229)
     YELLOW = (253, 240, 49)
 
-def set_os(os):
-    global fontname
-    global font_factor
-    if os == 'windows':
-        font_factor = 1.3
-        # windows font
-        fontname = pygame.font.get_default_font()
-    else:
-        # mac and linux font
-        fontname = "Arial"
-
 class Font:
-    f25 = pygame.font.SysFont( fontname, 25)
-    f30 = pygame.font.SysFont( fontname, 30)
-    f50 = pygame.font.SysFont( fontname, 50)
-    f70 = pygame.font.SysFont( fontname, 70)
-    f100 = pygame.font.SysFont(fontname, 100)
-    def set_dimfactor():
-        f25 = pygame.font.SysFont( fontname, E(25*font_factor))
-        f30 = pygame.font.SysFont( fontname, E(30*font_factor))
-        f50 = pygame.font.SysFont( fontname, E(50*font_factor))
-        f70 = pygame.font.SysFont( fontname, E(70*font_factor))
-        f100 = pygame.font.SysFont(fontname, E(100*font_factor))
-
+    f25 =  {'size':25 , 'font':pygame.font.SysFont( fontname, 25)}
+    f30 =  {'size':30 , 'font':pygame.font.SysFont( fontname, 30)}
+    f50 =  {'size':50 , 'font':pygame.font.SysFont( fontname, 50)}
+    f70 =  {'size':70 , 'font':pygame.font.SysFont( fontname, 70)}
+    f100 = {'size':100, 'font':pygame.font.SysFont(fontname, 100)}
+    @classmethod
+    def set_dimfactor(cls, factor):
+        cls.f25 =  {'size':25 , 'font':pygame.font.SysFont(fontname, round(factor*25 ))}
+        cls.f30 =  {'size':30 , 'font':pygame.font.SysFont(fontname, round(factor*30 ))}
+        cls.f50 =  {'size':50 , 'font':pygame.font.SysFont(fontname, round(factor*50 ))}
+        cls.f70 =  {'size':70 , 'font':pygame.font.SysFont(fontname, round(factor*70 ))}
+        cls.f100 = {'size':100, 'font':pygame.font.SysFont(fontname, round(factor*100))}
 
 class Form(pygame.sprite.Sprite):
-    screen = screen
-    MARGE_WIDTH = E(4)
-    def __init__(self, dim, color):
+    screen = None
+    MARGE_WIDTH = 4
+    MARGE_TEXT = 5
+    dim_object = None
+    def __init__(self, dim, pos, color, rescale=True):
         super().__init__()
-        self.surf = pygame.Surface(dim)
-        self.surf.fill(color)
-        self.dim = dim
+        self.ORI_DIM = dim
+        self.ORI_POS = pos
+        self.dim = self.dim_object.scale(dim)
+        self.pos = self.dim_object.scale(pos)
         self.COLOR = color
+        self.surf = pygame.Surface(self.dim)
+        self.surf.fill(color)
+        
+        if rescale:
+            # add every gui obj to interface to be able to rezise gui objs auto
+            Interface.gui_objects.append(self)
     
     def set_color(self, color, marge=False):
         self.surf.fill(color)
@@ -162,8 +182,8 @@ class Form(pygame.sprite.Sprite):
 
 def center_text(dim_box, font, text):
     width, height = font.size(text)
-    if width > dim_box[0] or height > dim_box[1]:
-        raise ValueError('Dimension too small for text')
+    #if width > dim_box[0] or height > dim_box[1]:
+    #    raise ValueError('Dimension too small for text')
     
     x_marge = int((dim_box[0] - width)/2)
     y_marge = int((dim_box[1] - height)/2)
@@ -171,8 +191,7 @@ def center_text(dim_box, font, text):
 
 class Cadre(Form):
     def __init__(self, dim, color, pos, set_transparent=False):
-        super().__init__(dim, color)
-        self.pos = pos
+        super().__init__(dim, pos, color)
         self.set_corners(pos, dim)
         self.set_highlight_color()
         self.MARGE_COLOR = self.high_color
@@ -186,18 +205,19 @@ class Cadre(Form):
 class Button(Form):
     def __init__(self, dim, color, pos, text='', TEXT_COLOR=(0,0,0), 
                     centered=True, font=Font.f50, image=False):
-        super().__init__(dim, color)
+        super().__init__(dim, pos, color)
+        
         if image:
-            self.img = image
-            self.img_dim = image.get_rect().size
-            self.set_pos_img(pos)
+            self.img_dim = self.dim_object.scale(image.get_rect().size)
+            self.img = pygame.transform.scale(image,self.img_dim) # rescale img
+            self.set_pos_img(self.pos)
             self.as_image = True
         else:
             self.as_image = False
             self.text = text
+        
         self.TEXT_COLOR = TEXT_COLOR
-        self.pos = pos
-        self.set_corners(pos, dim)
+        self.set_corners(self.pos, self.dim)
         self.highlighted = False
         self.centered = centered
         self.font = font
@@ -236,19 +256,19 @@ class Button(Form):
         # if it's text
         if not self.as_image: 
             if self.text: # check that there is text
-                x_marge, y_marge = center_text(self.dim, self.font, self.text)
+                x_marge, y_marge = center_text(self.dim, self.font['font'], self.text)
                 if not self.centered:
                     x_marge = E(5)
-                font_text = self.font.render(self.text,True,self.TEXT_COLOR)
+                font_text = self.font['font'].render(self.text,True,self.TEXT_COLOR)
                 self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+y_marge))
         else:
             self.screen.blit(self.img, self.img_pos)
 
 class TextBox(Form):
+    
     def __init__(self, dim, background_color, pos, text='', 
                     TEXT_COLOR=(0,0,0), centered=True, font=Font.f50, marge=False):
-        super().__init__(dim, background_color)
-        self.pos = pos
+        super().__init__(dim, pos, background_color)
         self.text = text
         self.centered = centered
         self.font = font
@@ -272,10 +292,10 @@ class TextBox(Form):
         # split the box in n part for n lines
         y_line = round(self.dim[1]/len(self.lines))
         for i, line in enumerate(self.lines):
-            x_marge, y_marge = center_text((self.dim[0],y_line), self.font, line)
+            x_marge, y_marge = center_text((self.dim[0],y_line), self.font['font'], line)
             if not self.centered:
-                x_marge = E(5)
-            font_text = self.font.render(line,True,self.TEXT_COLOR)
+                x_marge = self.MARGE_TEXT
+            font_text = self.font['font'].render(line,True,self.TEXT_COLOR)
             self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+i*y_line+y_marge))
 
 class Delayed:
@@ -309,6 +329,7 @@ get_input_deco = Delayed(3)
 cursor_deco = Delayed(20)
 
 class InputText(Button):
+    CURSOR_WIDTH = 2
     bool_cursor = True
     def __init__(self, dim, pos, color, TEXT_COLOR=(0,0,0), centered=False, font=Font.f30, limit=None, cache=False, text=''):
         super().__init__(dim, color, pos, TEXT_COLOR=TEXT_COLOR, centered=centered, font=font)
@@ -371,7 +392,7 @@ class InputText(Button):
     
     def display_text_cursor(self):
         width, height = self.font.size(self.text)
-        x_marge, y_marge = center_text(self.dim, self.font, self.text)
+        x_marge, y_marge = center_text(self.dim, self.font['font'], self.text)
         if not self.centered:
             x_marge = E(5)
 
@@ -379,7 +400,7 @@ class InputText(Button):
         top_pos = (self.TOPLEFT[0] + x_marge + width, self.TOPLEFT[1]+y_marge)
         
         if self.bool_cursor:
-            pygame.draw.line(self.screen, C.BLACK, top_pos, bottom_pos, E(2))
+            pygame.draw.line(self.screen, C.BLACK, top_pos, bottom_pos, self.CURSOR_WIDTH)
         self.change_cursor_state()
 
     @cursor_deco
@@ -400,24 +421,117 @@ class InputText(Button):
 class Interface:
     clock = pygame.time.Clock()
     running = True
-    screen = screen
+    FPS = 30
+    gui_objects = [] # all gui objects, ex: button, form...
+    resize_objects = [] # must have a on_resize(self, factor) method
 
-    def check_quit(self, pressed, events):
+    @classmethod
+    def setup(cls, dim, win_title, FPS=30, scale_factor=1, keep_ratio=True):
+        # create dimension
+        cls.keep_ratio = keep_ratio
+        cls.dim = Dimension(dim, scale_factor)
+        
+        Font.set_dimfactor(scale_factor)
+        
+        # create screen in full screen dimension: resize to specified dim
+
+        infoObject = pygame.display.Info()
+        fullscreen_dim = cls.dim.scale((infoObject.current_w, infoObject.current_h), factor=.95)
+
+        cls.screen = pygame.display.set_mode(fullscreen_dim, HWSURFACE|DOUBLEBUF|RESIZABLE)
+        cls.screen.fill(C.WHITE)
+        pygame.display.set_caption(win_title)
+
+        cls.FPS = FPS
+
+        cls.set_screen(cls.screen)
+        Form.dim_object = cls.dim # set dimension to rescale pos, dim in Font.__init__
+        Form.MARGE_WIDTH = cls.dim.E(Form.MARGE_WIDTH)
+        Form.MARGE_TEXT = cls.dim.E(Form.MARGE_TEXT)
+
+        cls.x_padding = Form((0,0),(0,0),C.WHITE, rescale=False)
+        cls.y_padding = Form((0,0),(0,0),C.WHITE, rescale=False)
+
+        # rescale window to correct dim
+        cls.rescale(fullscreen_dim)
+        
+    @classmethod
+    def set_screen(cls, screen):
+        Form.screen = cls.screen
+        TextBox.screen = cls.screen
+        Button.screen = cls.screen
+        InputText.screen = cls.screen
+        Cadre.screen = cls.screen
+
+        for gui_obj in cls.gui_objects:
+            gui_obj.screen = screen
+
+    @classmethod
+    def add_resizable_objs(cls, objects):
+        '''Object's method on_rezise(self, dim_object) will be called when window is rezised'''
+        cls.resize_objects.extend(objects)
+        # resize a first time
+        for obj in objects:
+            obj.on_resize(cls.dim.f)
+
+    @classmethod
+    def rescale(cls, new_dim):
+
+        # set new scale factor
+        scale_factor = min(new_dim[0]/cls.dim.x, new_dim[1]/cls.dim.y)
+
+        cls.dim.f = scale_factor
+
+        # create padding to fill blank space
+        dim_px = [new_dim[0] - cls.dim.size[0], cls.dim.size[1]]
+        if dim_px[0] > 0:
+            pos = [cls.dim.size[0], 0]
+            cls.x_padding.set_dim_pos(dim_px, pos)
+        
+        dim_py = [cls.dim.size[0], new_dim[1] - cls.dim.size[1]]
+        if dim_px[1] > 0:
+            pos = [0, cls.dim.size[1]]
+            cls.y_padding.set_dim_pos(dim_py, pos)
+
+        # resize font
+        Font.set_dimfactor(scale_factor)
+        
+        # resize every objects
+        for gui_obj in cls.gui_objects:
+            rs_pos = cls.dim.scale(gui_obj.ORI_POS)
+            rs_dim = cls.dim.scale(gui_obj.ORI_DIM)
+            gui_obj.set_dim_pos(rs_dim, rs_pos)
+            
+            # rezise existing fonts
+            if hasattr(gui_obj, 'font'):
+                fontsize = gui_obj.font['size']
+                gui_obj.font = getattr(Font,f'f{fontsize}')
+
+        for rz_obj in cls.resize_objects:
+            rz_obj.on_resize(scale_factor)
+
+    @classmethod
+    def run(cls, fill=True):
+        cls.x_padding.display()
+        cls.y_padding.display()
+        cls.clock.tick(cls.FPS)
+        
+        pygame.display.update()
+        if fill:
+            cls.screen.fill(C.WHITE)
+        pressed = pygame.key.get_pressed()
+        events = pygame.event.get()
+
         for event in events:
             # check quit
             if event.type == pygame.QUIT:
-                self.running = False
-        
+                cls.running = False
+            # check window resize
+            if event.type == VIDEORESIZE:
+                cls.rescale(event.dict['size'])
+                
         if pressed[pygame.K_ESCAPE]:
-            self.running = False
-
-    def run(self):
-        self.clock.tick(30)
-        pygame.display.update()
-        self.screen.fill(C.WHITE)
-        pressed = pygame.key.get_pressed()
-        events = pygame.event.get()
-        self.check_quit(pressed, events)
+            cls.running = False
 
         return pressed, events
 
