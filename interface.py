@@ -94,14 +94,25 @@ class Font:
 class Form(pygame.sprite.Sprite):
     screen = None
     MARGE_WIDTH = 4
+    rs_marge_width = 4
     MARGE_TEXT = 5
+    rs_marge_text = 5
     dim_object = None
-    def __init__(self, dim, pos, color, rescale=True):
+    def __init__(self, dim, pos, color, rescale=True, scale_pos=True, scale_dim=True):
         super().__init__()
         self.ORI_DIM = dim
         self.ORI_POS = pos
-        self.dim = self.dim_object.scale(dim)
-        self.pos = self.dim_object.scale(pos)
+        
+        if scale_dim:
+            self.dim = self.dim_object.scale(dim)
+        else:
+            self.dim = list(dim)
+        
+        if scale_pos:
+            self.pos = self.dim_object.scale(pos)
+        else:
+            self.pos = list(pos)
+        
         self.COLOR = color
         self.surf = pygame.Surface(self.dim)
         self.surf.fill(color)
@@ -136,10 +147,10 @@ class Form(pygame.sprite.Sprite):
             self.high_color = dark_color
 
     def display_margin(self):
-        pygame.draw.line(self.screen, self.MARGE_COLOR, self.TOPLEFT, self.TOPRIGHT, self.MARGE_WIDTH)
-        pygame.draw.line(self.screen, self.MARGE_COLOR, self.TOPLEFT, self.BOTTOMLEFT, self.MARGE_WIDTH)
-        pygame.draw.line(self.screen, self.MARGE_COLOR, self.TOPRIGHT, self.BOTTOMRIGHT, self.MARGE_WIDTH)
-        pygame.draw.line(self.screen, self.MARGE_COLOR, self.BOTTOMLEFT, self.BOTTOMRIGHT, self.MARGE_WIDTH)
+        pygame.draw.line(self.screen, self.MARGE_COLOR, self.TOPLEFT, self.TOPRIGHT, self.rs_marge_width)
+        pygame.draw.line(self.screen, self.MARGE_COLOR, self.TOPLEFT, self.BOTTOMLEFT, self.rs_marge_width)
+        pygame.draw.line(self.screen, self.MARGE_COLOR, self.TOPRIGHT, self.BOTTOMRIGHT, self.rs_marge_width)
+        pygame.draw.line(self.screen, self.MARGE_COLOR, self.BOTTOMLEFT, self.BOTTOMRIGHT, self.rs_marge_width)
 
     def display(self, pos=None, marge=False):
         ''' Display at given pos, if not given try with pos attribute'''
@@ -157,7 +168,10 @@ class Form(pygame.sprite.Sprite):
                 return True
         return False
 
-    def set_corners(self, pos, dim):
+    def set_corners(self, pos, dim, scale=False):
+        if scale:
+            pos = Interface.dim.scale(pos)
+            dim = Interface.dim.scale(dim)
         self.TOPLEFT = pos
         self.TOPRIGHT = (pos[0]+dim[0],pos[1])
         self.BOTTOMLEFT = (pos[0], pos[1]+dim[1])
@@ -182,8 +196,8 @@ class Form(pygame.sprite.Sprite):
 
 def center_text(dim_box, font, text):
     width, height = font.size(text)
-    #if width > dim_box[0] or height > dim_box[1]:
-    #    raise ValueError('Dimension too small for text')
+    if width > dim_box[0] or height > dim_box[1]:
+        print('interface.py - WARNING: Dimension too small for text')
     
     x_marge = int((dim_box[0] - width)/2)
     y_marge = int((dim_box[1] - height)/2)
@@ -192,7 +206,7 @@ def center_text(dim_box, font, text):
 class Cadre(Form):
     def __init__(self, dim, color, pos, set_transparent=False):
         super().__init__(dim, pos, color)
-        self.set_corners(pos, dim)
+        self.set_corners(self.pos, self.dim)
         self.set_highlight_color()
         self.MARGE_COLOR = self.high_color
         if set_transparent:
@@ -204,8 +218,8 @@ class Cadre(Form):
 
 class Button(Form):
     def __init__(self, dim, color, pos, text='', TEXT_COLOR=(0,0,0), 
-                    centered=True, font=Font.f50, image=False):
-        super().__init__(dim, pos, color)
+                    centered=True, font=Font.f50, image=False, scale_dim=True, scale_pos=True):
+        super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos)
         
         if image:
             self.img_dim = self.dim_object.scale(image.get_rect().size)
@@ -258,7 +272,7 @@ class Button(Form):
             if self.text: # check that there is text
                 x_marge, y_marge = center_text(self.dim, self.font['font'], self.text)
                 if not self.centered:
-                    x_marge = E(5)
+                    x_marge = self.rs_marge_text
                 font_text = self.font['font'].render(self.text,True,self.TEXT_COLOR)
                 self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+y_marge))
         else:
@@ -267,8 +281,8 @@ class Button(Form):
 class TextBox(Form):
     
     def __init__(self, dim, background_color, pos, text='', 
-                    TEXT_COLOR=(0,0,0), centered=True, font=Font.f50, marge=False):
-        super().__init__(dim, pos, background_color)
+                    TEXT_COLOR=(0,0,0), centered=True, font=Font.f50, marge=False, scale_dim=True, scale_pos=True):
+        super().__init__(dim, pos, background_color, scale_dim=scale_dim, scale_pos=scale_pos)
         self.text = text
         self.centered = centered
         self.font = font
@@ -294,7 +308,7 @@ class TextBox(Form):
         for i, line in enumerate(self.lines):
             x_marge, y_marge = center_text((self.dim[0],y_line), self.font['font'], line)
             if not self.centered:
-                x_marge = self.MARGE_TEXT
+                x_marge = self.rs_marge_text
             font_text = self.font['font'].render(line,True,self.TEXT_COLOR)
             self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+i*y_line+y_marge))
 
@@ -326,14 +340,16 @@ class Delayed:
         return inner
 
 get_input_deco = Delayed(3)
-cursor_deco = Delayed(20)
+cursor_deco = Delayed(15)
 
 class InputText(Button):
     CURSOR_WIDTH = 2
     bool_cursor = True
-    def __init__(self, dim, pos, color, TEXT_COLOR=(0,0,0), centered=False, font=Font.f30, limit=None, cache=False, text=''):
-        super().__init__(dim, color, pos, TEXT_COLOR=TEXT_COLOR, centered=centered, font=font)
+    def __init__(self, dim, pos, color, TEXT_COLOR=(0,0,0), centered=False, font=Font.f30,
+                    limit=None, cache=False, text='', scale_dim=True, scale_pos=True):
+        super().__init__(dim, color, pos, TEXT_COLOR=TEXT_COLOR, centered=centered, font=font, scale_dim=scale_dim, scale_pos=scale_pos)
         self.active = False
+        self.cursor_place = len(text)
         self.limit = limit # max char
         self.cache = cache # if true text -> ***
         # text: text that is display
@@ -342,10 +358,21 @@ class InputText(Button):
     
     def set_text(self, text):
         self.content = text
+        self.cursor_place = len(text)
         if self.cache:
             self.text = '$' * len(self.content)
         else:
             self.text = self.content
+
+    @get_input_deco
+    def is_moving_left(self, pressed):
+        if pressed[pygame.K_LEFT]:
+            return True
+
+    @get_input_deco
+    def is_moving_right(self, pressed):
+        if pressed[pygame.K_RIGHT]:
+            return True
 
     @get_input_deco
     def get_input(self, events, pressed):
@@ -368,21 +395,34 @@ class InputText(Button):
 
         key = get_pressed_key(pressed)
         if key:
-            self.content += key
+            self.content = self.content[:self.cursor_place] + key + self.content[self.cursor_place:]
+            self.cursor_place += 1
             if self.limit:
                 if len(self.content) > self.limit:
                     self.content = self.content[:-1]
+                    self.cursor_place -= 1
                 
             try:
-                center_text(self.dim, self.font, self.content)
+                center_text(self.dim, self.font['font'], self.content)
             except ValueError:
                 self.content = self.content[:-1]
+                self.cursor_place -= 1
             return True
         
         if pressed[pygame.K_BACKSPACE]:
-            self.content = self.content[:-1]
+            self.content = self.content[:self.cursor_place-1] + self.content[self.cursor_place:]
+            self.cursor_place -= 1
             return True
     
+        # check for cursor change
+        if self.is_moving_left(pressed):
+            if self.cursor_place > 0:
+                self.cursor_place -= 1
+        
+        if self.is_moving_right(pressed):
+            if self.cursor_place < len(self.content):
+                self.cursor_place += 1
+
         if self.cache:
             self.text = '$' * len(self.content)
         else:
@@ -391,10 +431,10 @@ class InputText(Button):
         return False
     
     def display_text_cursor(self):
-        width, height = self.font.size(self.text)
-        x_marge, y_marge = center_text(self.dim, self.font['font'], self.text)
+        width, height = self.font['font'].size(self.text[:self.cursor_place])
+        x_marge, y_marge = center_text(self.dim, self.font['font'], self.text[:self.cursor_place])
         if not self.centered:
-            x_marge = E(5)
+            x_marge = self.rs_marge_text
 
         bottom_pos = (self.TOPLEFT[0] + x_marge + width, self.BOTTOMLEFT[1]-y_marge)
         top_pos = (self.TOPLEFT[0] + x_marge + width, self.TOPLEFT[1]+y_marge)
@@ -421,17 +461,18 @@ class InputText(Button):
 class Interface:
     clock = pygame.time.Clock()
     running = True
-    FPS = 30
     gui_objects = [] # all gui objects, ex: button, form...
     resize_objects = [] # must have a on_resize(self, factor) method
 
     @classmethod
-    def setup(cls, dim, win_title, FPS=30, scale_factor=1, keep_ratio=True):
-        # create dimension
-        cls.keep_ratio = keep_ratio
-        cls.dim = Dimension(dim, scale_factor)
+    def setup(cls, dim, win_title, FPS=30):
+        '''
+        Arguments:
+            dim: default window dimension, used to set other object's dimension
+        '''
         
-        Font.set_dimfactor(scale_factor)
+        # create dimension
+        cls.dim = Dimension(dim, 1)
         
         # create screen in full screen dimension: resize to specified dim
 
@@ -446,8 +487,8 @@ class Interface:
 
         cls.set_screen(cls.screen)
         Form.dim_object = cls.dim # set dimension to rescale pos, dim in Font.__init__
-        Form.MARGE_WIDTH = cls.dim.E(Form.MARGE_WIDTH)
-        Form.MARGE_TEXT = cls.dim.E(Form.MARGE_TEXT)
+        Form.rs_marge_width = cls.dim.E(Form.MARGE_WIDTH)
+        Form.rs_marge_text = cls.dim.E(Form.MARGE_TEXT)
 
         cls.x_padding = Form((0,0),(0,0),C.WHITE, rescale=False)
         cls.y_padding = Form((0,0),(0,0),C.WHITE, rescale=False)
@@ -468,7 +509,10 @@ class Interface:
 
     @classmethod
     def add_resizable_objs(cls, objects):
-        '''Object's method on_rezise(self, dim_object) will be called when window is rezised'''
+        '''Object's method on_rezise(self, scale_factor) will be called when window is rezised
+        
+        scale_factor: factor of dimension compared to initial dimension
+        '''
         cls.resize_objects.extend(objects)
         # resize a first time
         for obj in objects:
@@ -496,6 +540,10 @@ class Interface:
         # resize font
         Font.set_dimfactor(scale_factor)
         
+        # resize marges
+        Form.rs_marge_width = cls.dim.E(Form.MARGE_WIDTH)
+        Form.rs_marge_text = cls.dim.E(Form.MARGE_TEXT)
+
         # resize every objects
         for gui_obj in cls.gui_objects:
             rs_pos = cls.dim.scale(gui_obj.ORI_POS)
