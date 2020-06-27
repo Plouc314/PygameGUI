@@ -18,6 +18,33 @@ def center_text(dim_box, font, text):
     y_marge = int((dim_box[1] - height)/2)
     return x_marge, y_marge
 
+class Delayer:
+    '''
+    Creates decorators,
+
+    The decorated function should return True/False depending on whether or not it has been activated,
+    if true, creates a delay in order to be spammed.
+    '''
+    wait = 0
+    delayed = False
+    def __init__(self, delay):
+        self.delay = delay
+        
+    def __call__(self, func):
+        def inner(*args, **kwargs):
+            if self.delayed:
+                self.wait += 1
+                if self.wait == self.delay:
+                    self.delayed = False
+                    self.wait = 0
+            else:
+                # first argument if a boolean value of if the tested key was pressed
+                executed = func(*args, **kwargs)
+                if executed:
+                    self.delayed = True
+                return executed
+        return inner
+
 class Dimension:
     f = 1
     def __init__(self, dim, f):
@@ -60,6 +87,9 @@ class Dimension:
         else:
             x = int(x*f)
         return x
+
+    def inv_scale(self, x):
+        return self.scale(x, factor=1/self.f)
 
     def E(self, x):
         return round(x*self.f)
@@ -233,7 +263,6 @@ class Form(pygame.sprite.Sprite):
             self.surf = pygame.Surface(self.dim)
             self.surf.fill(self.COLOR)
         elif self.surf_type:
-            print('rescale surf')
             self.surf = pygame.transform.scale(self.ori_surf, self.dim)
 
     def set_pos(self, pos, center=False, scale=False):
@@ -364,42 +393,15 @@ class TextBox(Form):
             font_text = self.font['font'].render(line,True,self.text_color)
             self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+i*y_line+y_marge))
 
-class Delayed:
-    '''
-    Creates decorators,
-
-    The decorated function should return True/False depending on whether or not it has been activated,
-    if true, creates a delay in order to be spammed.
-    '''
-    wait = 0
-    delayed = False
-    def __init__(self, delay):
-        self.delay = delay
-        
-    def __call__(self, func):
-        def inner(*args, **kwargs):
-            if self.delayed:
-                self.wait += 1
-                if self.wait == self.delay:
-                    self.delayed = False
-                    self.wait = 0
-            else:
-                # first argument if a boolean value of if the tested key was pressed
-                executed = func(*args, **kwargs)
-                if executed:
-                    self.delayed = True
-                return executed
-        return inner
-
-get_input_deco = Delayed(3)
-cursor_deco = Delayed(15)
+get_input_deco = Delayer(3)
+cursor_deco = Delayer(15)
 
 class InputText(Button):
     CURSOR_WIDTH = 2
     bool_cursor = True
     def __init__(self, dim, pos, color=C.WHITE, text_color=(0,0,0), centered=False, font=Font.f30,
                     limit=None, cache=False, text='', scale_dim=True, scale_pos=True):
-        super().__init__(dim, color, pos, text_color=text_color, centered=centered, font=font, scale_dim=scale_dim, scale_pos=scale_pos)
+        super().__init__(dim, pos, color, text_color=text_color, centered=centered, font=font, scale_dim=scale_dim, scale_pos=scale_pos)
         self.active = False
         self.cursor_place = len(text)
         self.limit = limit # max char
@@ -615,10 +617,14 @@ class Interface:
         cls.clock.tick(cls.FPS)
         
         pygame.display.update()
+
         if fill:
             cls.screen.fill(C.WHITE)
+
         pressed = pygame.key.get_pressed()
         events = pygame.event.get()
+
+        cls.mouse_pos = pygame.mouse.get_pos()
 
         for event in events:
             # check quit

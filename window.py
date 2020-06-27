@@ -1,7 +1,4 @@
-class Window:
-    def __init__(self, name, dim):
-        self.name = name
-        self.dim = list(dim)
+
 
 SEPARATOR = '/'
 
@@ -41,12 +38,12 @@ def create_gobj(string):
 def write_py_file(win_name, dim, gobjs):
     obj_name = win_name[0].upper() + win_name[1:]
     content = f'''
-from base import TextBox, Cadre, Font, C, Button, dim, InputText, E, scale, Form, screen
+from interface import Interface, TextBox, Cadre, Font, C, Button, InputText, Form
 import pygame
 
 class {obj_name}:
     def __init__(self, pos):
-        self.cadre = Cadre((E({dim[0]}), E({dim[1]})), C.WHITE, pos)
+        self.cadre = Cadre(({dim[0]}, {dim[1]}), C.WHITE, pos)
 '''
     py_names = []
     for gobj in gobjs:
@@ -58,19 +55,19 @@ class {obj_name}:
         font = gobj['font']
 
         if gobj['objtype'] == 'TextBox':
-            string = f'        self.text_{name} = TextBox((E({dim[0]}), E({dim[1]})), C.{color}, (pos[0]+E({pos[0]}),pos[1]+E({pos[1]})),"{text}",font=Font.{font})'
+            string = f'        self.text_{name} = TextBox(({dim[0]}, {dim[1]}), C.{color}, (pos[0]+{pos[0]},pos[1]+{pos[1]}),"{text}",font=Font.{font})'
             py_names.append(f'text_{name}')
 
         elif gobj['objtype'] == 'Button':
-            string = f'        self.button_{name} = Button((E({dim[0]}), E({dim[1]})), C.{color}, (pos[0]+E({pos[0]}),pos[1]+E({pos[1]})),"{text}",font=Font.{font})'
+            string = f'        self.button_{name} = Button(({dim[0]}, {dim[1]}), C.{color}, (pos[0]+{pos[0]},pos[1]+{pos[1]}),"{text}",font=Font.{font})'
             py_names.append(f'button_{name}')
         
         elif gobj['objtype'] == 'InputText':
-            string = f'        self.input_{name} = InputText((E({dim[0]}), E({dim[1]})), (pos[0]+E({pos[0]}),pos[1]+E({pos[1]})), C.{color},text="{text}",font=Font.{font})'
+            string = f'        self.input_{name} = InputText(({dim[0]}, {dim[1]}), (pos[0]+{pos[0]},pos[1]+{pos[1]}), C.{color},text="{text}",font=Font.{font})'
             py_names.append(f'input_{name}')
         
         elif gobj['objtype'] == 'Cadre':
-            string = f'        self.cadre_{name} = Cadre((E({dim[0]}), E({dim[1]})), C.{color}, (pos[0]+E({pos[0]}),pos[1]+E({pos[1]})))'
+            string = f'        self.cadre_{name} = Cadre(({dim[0]}, {dim[1]}), C.{color}, (pos[0]+{pos[0]},pos[1]+{pos[1]}))'
             py_names.append(f'cadre_{name}')
         
         content += string + '\n'

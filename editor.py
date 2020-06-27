@@ -1,42 +1,48 @@
-from base import TextBox, Cadre, Font, C, Button, dim, InputText, E, windows, scale, Form, screen
+from interface import Interface, TextBox, Cadre, Font, C, Button, InputText, Form
 from settings import Settings
 import pygame
 
-DIM_TOOLS = scale((400, 80))
-DIM_DRAG = scale((200,60))
-DIM_BDONE = scale((120, 60))
-DIM_CORNER = scale((15,15))
-POS_TY = E(200)
-POS_WIN = scale((600, 200))
+DIM_TOOLS = (400, 80)
+DIM_DRAG = (200,60)
+DIM_BDONE = (120, 60)
+DIM_CORNER = (15,15)
+POS_TY = 200
+POS_WIN = (600, 200)
 
 SEPARATOR = '/'
 
 class DragSurf(Form):
     def __init__(self, pos, color, objtype):
-        super().__init__(DIM_DRAG, color)
-        self.pos = list(pos)
+        super().__init__(DIM_DRAG, pos, color)
         self.objtype = objtype
     
     def run(self):
         pos = pygame.mouse.get_pos()
         self.display(pos)
 
+POS_X = Interface.dim.x - 600
+
 class GuiObj(Button):
     changing_dim = False
     chan_dim_corner = None
     name = ''
     fontname = 'f25'
-    color = 'WHITE'
+    color = 'default'
+    is_draging = False
+    delta_pos = None # dif between mouse pos and topleft when draging
 
     def __init__(self, pos, color, objtype):
-        super().__init__(DIM_DRAG, color, pos)
-        self.set_corners(pos, DIM_DRAG)
-        self.pos = list(pos)
+        # don't scale pos as it is the mouse pos
+        super().__init__(DIM_DRAG, pos,color, scale_pos=False)
+        self.input_text = InputText(DIM_DRAG, pos, C.WHITE, font=Font.f25, centered=True, scale_pos=False)
         self.objtype = objtype
-        self.input_text = InputText(DIM_DRAG, pos, C.WHITE, font=Font.f25, centered=True)
         self.selected = True
         self.SELECT_COLOR = C.BLUE
         self.set_corners_points()
+
+        # color range
+        self.ptr_pos = None
+        self.bptr_y = None
 
         if self.objtype == 'TextBox' or self.objtype == 'Button':
             self.can_input = True
@@ -47,23 +53,23 @@ class GuiObj(Button):
         return (self.pos[0]-POS_WIN[0], self.pos[1]-POS_WIN[1])
 
     def set_corners_points(self):
-        corner = Button(DIM_CORNER, C.BLUE, (0,0))
-        corner.MARGE_WIDTH = E(3)
+        corner = Button(DIM_CORNER, (0,0), C.BLUE)
+        corner.MARGE_WIDTH = Interface.dim.E(3)
         self.CTOPLEFT = corner
         self.CTOPLEFT.set_pos(self.TOPLEFT, center=True)
 
-        corner = Button(DIM_CORNER, C.BLUE, (0,0))
-        corner.MARGE_WIDTH = E(3)
+        corner = Button(DIM_CORNER, (0,0), C.BLUE)
+        corner.MARGE_WIDTH = Interface.dim.E(3)
         self.CTOPRIGHT = corner
         self.CTOPRIGHT.set_pos(self.TOPRIGHT, center=True)
         
-        corner = Button(DIM_CORNER, C.BLUE, (0,0))
-        corner.MARGE_WIDTH = E(3)
+        corner = Button(DIM_CORNER, (0,0), C.BLUE)
+        corner.MARGE_WIDTH = Interface.dim.E(3)
         self.CBOTTOMRIGHT = corner
         self.CBOTTOMRIGHT.set_pos(self.BOTTOMRIGHT, center=True)
 
-        corner = Button(DIM_CORNER, C.BLUE, (0,0))
-        corner.MARGE_WIDTH = E(3)
+        corner = Button(DIM_CORNER, (0,0), C.BLUE)
+        corner.MARGE_WIDTH = Interface.dim.E(3)
         self.CBOTTOMLEFT = corner
         self.CBOTTOMLEFT.set_pos(self.BOTTOMLEFT, center=True)
 
@@ -84,18 +90,17 @@ class GuiObj(Button):
             pos = self.pos
             dim = [mouse_pos[0] - self.TOPLEFT[0], mouse_pos[1] - self.TOPLEFT[1]]
         
-        # change text in setting
-        Settings.input_coordx.set_text(str(pos[0]))
-        Settings.input_coordy.set_text(str(pos[1]))
-        Settings.input_dimx.set_text(str(dim[0]))
-        Settings.input_dimy.set_text(str(dim[1]))
-
         self.set_new_dim(dim, pos)
 
     def set_new_dim(self, dim, pos):
         self.set_dim_pos(dim, pos)
         self.input_text.set_dim_pos(dim, pos)
         self.set_corners_points()
+        # change text in setting
+        Settings.input_coordx.set_text(str(pos[0]))
+        Settings.input_coordy.set_text(str(pos[1]))
+        Settings.input_dimx.set_text(str(dim[0]))
+        Settings.input_dimy.set_text(str(dim[1]))
 
     def set_select_color(self, color):
         self.SELECT_COLOR = color
@@ -107,29 +112,45 @@ class GuiObj(Button):
         self.input_text.display()
 
         if self.selected:
-            pygame.draw.line(screen, self.SELECT_COLOR, self.BOTTOMLEFT, self.BOTTOMRIGHT, E(3))
-            pygame.draw.line(screen, self.SELECT_COLOR, self.TOPLEFT, self.TOPRIGHT, E(3))
-            pygame.draw.line(screen, self.SELECT_COLOR, self.TOPLEFT, self.BOTTOMLEFT, E(3))
-            pygame.draw.line(screen, self.SELECT_COLOR, self.TOPRIGHT, self.BOTTOMRIGHT, E(3))
+            pygame.draw.line(Interface.screen, self.SELECT_COLOR, self.BOTTOMLEFT, self.BOTTOMRIGHT, 3)
+            pygame.draw.line(Interface.screen, self.SELECT_COLOR, self.TOPLEFT, self.TOPRIGHT, 3)
+            pygame.draw.line(Interface.screen, self.SELECT_COLOR, self.TOPLEFT, self.BOTTOMLEFT, 3)
+            pygame.draw.line(Interface.screen, self.SELECT_COLOR, self.TOPRIGHT, self.BOTTOMRIGHT, 3)
             for cp in self.corners_points:
                 cp.display()
 
     def react_events(self, events, pressed):
         
         self.as_change_dim = False
+        mouse_pos = pygame.mouse.get_pos()
 
-        for event in events:
-            if event.type == pygame.MOUSEBUTTONUP:
-                if self.changing_dim:
-                    try:
-                        self.set_new_dim_mouse()
-                    except:
-                        print('Error in setting new dim')
-                    
-                    self.changing_dim = False
-                    self.set_select_color(C.BLUE)
-                    self.as_change_dim = True
-        
+        if self.selected:
+            for event in events:
+                if event.type == pygame.MOUSEBUTTONUP:
+                    self.is_draging = False
+                    if self.changing_dim:
+                        try:
+                            self.set_new_dim_mouse()
+                        except:
+                            print('Error in setting new dim')
+                        
+                        self.changing_dim = False
+                        self.set_select_color(C.BLUE)
+                        self.as_change_dim = True
+
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if Editor.TOP_RIGHT[0] > mouse_pos[0]:
+                        self.is_draging = True
+                        dx = mouse_pos[0] - self.TOPLEFT[0]
+                        dy = mouse_pos[1] - self.TOPLEFT[1]
+                        self.delta_pos = [dx, dy]
+
+        # when draging: update pos
+        if self.is_draging:
+            new_x = mouse_pos[0] - self.delta_pos[0]
+            new_y = mouse_pos[1] - self.delta_pos[1]
+            self.set_new_dim(self.dim, (new_x, new_y))
+
         if not self.as_change_dim: # bool value to avoid reselect instantly
             for i, cp in enumerate(self.corners_points):
                 if cp.pushed(events):
@@ -143,26 +164,43 @@ class GuiObj(Button):
         
 class Editor:
     # tools
-    button_text_box = Button(DIM_TOOLS, C.XLIGHT_GREY, (0, POS_TY), 'TextBox')
-    button_button = Button(DIM_TOOLS, C.XLIGHT_GREY, (0, POS_TY+E(80)), 'Button')
-    button_input_text = Button(DIM_TOOLS, C.XLIGHT_GREY, (0, POS_TY+E(160)), 'InputText')
-    button_cadre = Button(DIM_TOOLS, C.XLIGHT_GREY, (0, POS_TY+E(240)), 'Cadre')
-    button_done = Button(DIM_BDONE, C.LIGHT_BLUE, (E(2800), E(1400)), 'Done',font=Font.f30)
+    button_text_box = Button(DIM_TOOLS, (0, POS_TY), C.XLIGHT_GREY,'TextBox')
+    button_button = Button(DIM_TOOLS, (0, POS_TY+80), C.XLIGHT_GREY,'Button')
+    button_input_text = Button(DIM_TOOLS, (0, POS_TY+160), C.XLIGHT_GREY,'InputText')
+    button_cadre = Button(DIM_TOOLS, (0, POS_TY+240), C.XLIGHT_GREY,'Cadre')
+    button_done = Button(DIM_BDONE, (2800, 1400), C.LIGHT_BLUE,'Done',font=Font.f30)
     drag_surf = None
     objs = []
     state = 'running'
+
+    # set attr here for on_resize method
+    window = None
+    TOP_LEFT     = [0,0]
+    TOP_RIGHT    = [0,0]
+    BOTTOM_LEFT  = [0,0]
+    BOTTOM_RIGHT = [0,0]
 
     current_selected = None
 
     @classmethod
     def set_window(cls, window):
         cls.window = window
-        dim = window.dim#(int(window.dim[0]*3/4), int(window.dim[1]*3/4))
-        cls.cadre = Cadre(dim, C.WHITE, POS_WIN)
-        cls.TOP_LEFT = [POS_WIN[0], POS_WIN[1]]
-        cls.TOP_RIGHT = [POS_WIN[0] + dim[0], POS_WIN[1]]
-        cls.BOTTOM_LEFT = [POS_WIN[0], POS_WIN[1] + dim[1]]
-        cls.BOTTOM_RIGHT = [POS_WIN[0] + dim[0], POS_WIN[1] + dim[1]] 
+        # don't rescale window.dim to have the original dimension stored (for on_resize)
+        dim = window.dim
+        cls.cadre = Cadre(dim, POS_WIN, C.WHITE)
+        cls.TOP_LEFT     = Interface.dim.scale([POS_WIN[0], POS_WIN[1]])
+        cls.TOP_RIGHT    = Interface.dim.scale([POS_WIN[0] + dim[0], POS_WIN[1]])
+        cls.BOTTOM_LEFT  = Interface.dim.scale([POS_WIN[0], POS_WIN[1] + dim[1]])
+        cls.BOTTOM_RIGHT = Interface.dim.scale([POS_WIN[0] + dim[0], POS_WIN[1] + dim[1]] )
+
+    @staticmethod
+    def on_resize(factor):
+        if Editor.window:
+            dim = Editor.window.dim
+            Editor.TOP_LEFT     = Interface.dim.scale([POS_WIN[0], POS_WIN[1]])
+            Editor.TOP_RIGHT    = Interface.dim.scale([POS_WIN[0] + dim[0], POS_WIN[1]])
+            Editor.BOTTOM_LEFT  = Interface.dim.scale([POS_WIN[0], POS_WIN[1] + dim[1]])
+            Editor.BOTTOM_RIGHT = Interface.dim.scale([POS_WIN[0] + dim[0], POS_WIN[1] + dim[1]] )
 
     @classmethod
     def create_obj(cls, pos, objtype):
@@ -204,14 +242,15 @@ class Editor:
     @classmethod
     def create_savefile(cls):
         # create file
-        with open(cls.window.name+'.txt','w') as file:
+        with open(cls.window.name+'.pygui','w') as file:
+            sep = '\n'+SEPARATOR+'\n'
             # first write name, dim of window
             global_info = f'{cls.window.name} {cls.window.dim[0]} {cls.window.dim[1]}'
             file.write(global_info)
-            file.write('\n'+SEPARATOR+'\n')
+            file.write(sep)
             for gobj in cls.objs:
                 file.write(cls.str_gobj(gobj))
-                file.write('\n'+SEPARATOR+'\n')
+                file.write(sep)
 
     @classmethod
     def display(cls):

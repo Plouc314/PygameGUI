@@ -1,18 +1,23 @@
-from base import Interface
-from menu import Menu
-from testfile import Testfile
+from interface import Interface
 
-inter = Interface()
+Interface.setup((3000,1600),'GUI Editor')
+
+from menu import Menu
+#from testfile import Testfile
 
 menu = Menu()
 
-tf = Testfile((100,100))
+from editor import Editor
 
-while inter.running:
-    pressed, events = inter.run()
+Interface.add_resizable_objs([Editor])
+
+#tf = Testfile((100,100))
+
+while Interface.running:
+    pressed, events = Interface.run()
     #
     #tf.display()
     #
     menu.run(events, pressed)
     if menu.state == 'end':
-        inter.running = False
+        Interface.running = False
