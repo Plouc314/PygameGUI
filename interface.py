@@ -9,6 +9,15 @@ def mean(array):
         total += v
     return total/len(array)
 
+def center_text(dim_box, font, text):
+    width, height = font.size(text)
+    if width > dim_box[0] or height > dim_box[1]:
+        print('interface.py - WARNING: Dimension too small for text')
+    
+    x_marge = int((dim_box[0] - width)/2)
+    y_marge = int((dim_box[1] - height)/2)
+    return x_marge, y_marge
+
 class Dimension:
     f = 1
     def __init__(self, dim, f):
@@ -98,29 +107,68 @@ class Form(pygame.sprite.Sprite):
     MARGE_TEXT = 5
     rs_marge_text = 5
     dim_object = None
-    def __init__(self, dim, pos, color, rescale=True, scale_pos=True, scale_dim=True):
+    def __init__(self, dim, pos, color=C.WHITE, rescale=True, scale_pos=True, scale_dim=True, surface=None):
         super().__init__()
-        self.ORI_DIM = dim
-        self.ORI_POS = pos
         
-        if scale_dim:
-            self.dim = self.dim_object.scale(dim)
-        else:
-            self.dim = list(dim)
+        self.set_dim_attr(dim, scale=scale_dim, update_surf=False)
         
-        if scale_pos:
-            self.pos = self.dim_object.scale(pos)
-        else:
-            self.pos = list(pos)
+        self.set_pos_attr(pos, scale=scale_pos)
         
         self.COLOR = color
-        self.surf = pygame.Surface(self.dim)
-        self.surf.fill(color)
+    
+        self.set_surf(surface)
         
         if rescale:
             # add every gui obj to interface to be able to rezise gui objs auto
             Interface.gui_objects.append(self)
+
+    def set_surf(self, surface=None):
+        '''
+        Set the surface attribute
+        
+        Arguments:
+            surface : can be either a pygame.Surface or numpy.ndarray object, by default: uni-color surf
+        '''
+        try:
+            if not surface:
+                # by default: create a uni-colored surface
+                self.surf_type = 'default'
+                self.surf = pygame.Surface(self.dim)
+                self.surf.fill(self.COLOR)
+            else:
+                # if custom surface: keep a original surf to rescale properly
+                self.surf_type = 'custom'
+                self.ori_surf = surface
+                self.surf = pygame.transform.scale(surface, self.dim)
+        except ValueError:
+            # numpy array
+            self.surf_type = 'custom'
+            self.ori_surf = pygame.surfarray.make_surface(surface)
+            self.surf = pygame.transform.scale(self.ori_surf, self.dim)
+
+    def set_dim_attr(self, dim, scale=False, update_original=True, update_surf=True):
+        if scale:
+            self.dim = self.dim_object.scale(dim)
+            if update_original:
+                self.ORI_DIM = list(dim)
+        else:
+            self.dim = list(dim)
+            if update_original:
+                self.ORI_DIM = self.dim_object.scale(dim, factor=1/self.dim_object.f)
+        
+        if update_surf:
+            self.rescale_surf()
     
+    def set_pos_attr(self, pos, scale=False, update_original=True):
+        if scale:
+            self.pos = self.dim_object.scale(pos)
+            if update_original:
+                self.ORI_POS = list(pos)
+        else:
+            self.pos = list(pos)
+            if update_original:
+                self.ORI_POS = self.dim_object.scale(pos, factor=1/self.dim_object.f)
+
     def set_color(self, color, marge=False):
         self.surf.fill(color)
         self.COLOR = color
@@ -153,7 +201,12 @@ class Form(pygame.sprite.Sprite):
         pygame.draw.line(self.screen, self.MARGE_COLOR, self.BOTTOMLEFT, self.BOTTOMRIGHT, self.rs_marge_width)
 
     def display(self, pos=None, marge=False):
-        ''' Display at given pos, if not given try with pos attribute'''
+        '''Display form
+        
+        Arguments:
+            pos : can specify position where the form is displayed
+            marge : if the marges are also displayed
+        '''
         if pos:
             self.screen.blit(self.surf, pos)
         else:
@@ -168,45 +221,60 @@ class Form(pygame.sprite.Sprite):
                 return True
         return False
 
-    def set_corners(self, pos, dim, scale=False):
-        if scale:
-            pos = Interface.dim.scale(pos)
-            dim = Interface.dim.scale(dim)
-        self.TOPLEFT = pos
-        self.TOPRIGHT = (pos[0]+dim[0],pos[1])
-        self.BOTTOMLEFT = (pos[0], pos[1]+dim[1])
-        self.BOTTOMRIGHT = (pos[0]+dim[0],pos[1]+dim[1])
+    def set_corners(self):
+        self.TOPLEFT = self.pos.copy()
+        self.TOPRIGHT = (self.pos[0]+self.dim[0],self.pos[1])
+        self.BOTTOMLEFT = (self.pos[0], self.pos[1]+self.dim[1])
+        self.BOTTOMRIGHT = (self.pos[0]+self.dim[0],self.pos[1]+self.dim[1])
 
-    def set_pos(self, pos, center=False):
+    def rescale_surf(self):
+        '''Rescale the surf attribute to the current dimension'''
+        if self.surf_type == 'default':
+            self.surf = pygame.Surface(self.dim)
+            self.surf.fill(self.COLOR)
+        elif self.surf_type:
+            print('rescale surf')
+            self.surf = pygame.transform.scale(self.ori_surf, self.dim)
+
+    def set_pos(self, pos, center=False, scale=False):
+        '''Set a new position
+        
+        Arguments:
+            - pos : the new position
+            - center : if true, the form will be centered on the new pos, else the new pos is the top left of the obj
+            - scale : if the position needs to be rescaled to the current window's dimension
+        '''
         if not center:
-            self.pos = pos
-            self.set_corners(pos, self.dim)
+            self.set_pos_attr(pos, scale=scale)
+            self.set_corners()
         else:
-            pos = list(pos)
+            if scale:
+                pos = self.dim_object.scale(pos)
+            else:
+                pos = list(pos)
             top_left = [int(pos[0]-self.dim[0]/2), int(pos[1]-self.dim[1]/2)]
-            self.pos = top_left
-            self.set_corners(top_left, self.dim)
+            self.set_pos_attr(top_left)
+            self.set_corners()
 
-    def set_dim_pos(self, dim, pos):
-        self.surf = pygame.Surface(dim)
-        self.surf.fill(self.COLOR)
-        self.dim = dim
-        self.pos = list(pos)
-        self.set_corners(pos, dim)
-
-def center_text(dim_box, font, text):
-    width, height = font.size(text)
-    if width > dim_box[0] or height > dim_box[1]:
-        print('interface.py - WARNING: Dimension too small for text')
-    
-    x_marge = int((dim_box[0] - width)/2)
-    y_marge = int((dim_box[1] - height)/2)
-    return x_marge, y_marge
+    def set_dim_pos(self, dim, pos, scale_dim=False, scale_pos=False, update_original=True):
+        '''
+        Reset dimension & position of form
+        
+        Arguments:
+            - dim, pos : new dimension, position
+            - scale_dim/pos : if new dim/pos need to be scaled to current window's dimension
+            - update_original : if new dim/pos are kept when window is resized
+        '''
+        self.set_dim_attr(dim, scale=scale_dim, update_original=update_original)
+        self.set_pos_attr(pos, scale=scale_pos, update_original=update_original)
+        self.set_corners()
 
 class Cadre(Form):
-    def __init__(self, dim, color, pos, set_transparent=False):
-        super().__init__(dim, pos, color)
-        self.set_corners(self.pos, self.dim)
+    def __init__(self, dim, pos, color=C.WHITE, set_transparent=False, scale_dim=True, scale_pos=True):
+        
+        super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos)
+        
+        self.set_corners()
         self.set_highlight_color()
         self.MARGE_COLOR = self.high_color
         if set_transparent:
@@ -217,32 +285,20 @@ class Cadre(Form):
         self.display_margin()
 
 class Button(Form):
-    def __init__(self, dim, color, pos, text='', TEXT_COLOR=(0,0,0), 
-                    centered=True, font=Font.f50, image=False, scale_dim=True, scale_pos=True):
-        super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos)
+    def __init__(self, dim, pos, color=C.WHITE, text='', text_color=(0,0,0), 
+                    centered=True, font=Font.f50, surface=None, scale_dim=True, scale_pos=True, highlight=True):
         
-        if image:
-            self.img_dim = self.dim_object.scale(image.get_rect().size)
-            self.img = pygame.transform.scale(image,self.img_dim) # rescale img
-            self.set_pos_img(self.pos)
-            self.as_image = True
-        else:
-            self.as_image = False
-            self.text = text
+        super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos, surface=surface)
+
+        self.text = text
         
-        self.TEXT_COLOR = TEXT_COLOR
-        self.set_corners(self.pos, self.dim)
-        self.highlighted = False
+        self.text_color = text_color
+        self.set_corners()
+        self.highlighted = highlight
         self.centered = centered
         self.font = font
         self.set_highlight_color()
         self.MARGE_COLOR = self.high_color
-
-    def set_pos_img(self, pos):
-        ''' create pos to display the img centered'''
-        dx = int((self.dim[0] - self.img_dim[0])/2)
-        dy = int((self.dim[1] - self.img_dim[1])/2)
-        self.img_pos = [pos[0]+dx, pos[1]+dy]
 
     def pushed(self, events):
         if self.on_it():
@@ -259,36 +315,32 @@ class Button(Form):
     def display(self):
         
         if self.highlighted:
-            self.surf.fill(self.high_color)
-        else:
             self.highlight()
         
-        super().display(self.pos)
+        super().display()
         
         self.display_margin()
         
-        # if it's text
-        if not self.as_image: 
-            if self.text: # check that there is text
-                x_marge, y_marge = center_text(self.dim, self.font['font'], self.text)
-                if not self.centered:
-                    x_marge = self.rs_marge_text
-                font_text = self.font['font'].render(self.text,True,self.TEXT_COLOR)
-                self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+y_marge))
-        else:
-            self.screen.blit(self.img, self.img_pos)
+        if self.text: # check that there is text
+            x_marge, y_marge = center_text(self.dim, self.font['font'], self.text)
+            if not self.centered:
+                x_marge = self.rs_marge_text
+            font_text = self.font['font'].render(self.text,True,self.text_color)
+            self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+y_marge))
 
 class TextBox(Form):
     
-    def __init__(self, dim, background_color, pos, text='', 
-                    TEXT_COLOR=(0,0,0), centered=True, font=Font.f50, marge=False, scale_dim=True, scale_pos=True):
-        super().__init__(dim, pos, background_color, scale_dim=scale_dim, scale_pos=scale_pos)
+    def __init__(self, dim, pos, color=C.WHITE, text='', 
+                    text_color=(0,0,0), centered=True, font=Font.f50, marge=False, scale_dim=True, scale_pos=True):
+        
+        super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos)
+        
         self.text = text
         self.centered = centered
         self.font = font
         self.lines = text.split('\n')
-        self.TEXT_COLOR = TEXT_COLOR
-        self.set_corners(pos, dim)
+        self.text_color = text_color
+        self.set_corners()
         self.as_marge = marge
         if marge:
             self.set_highlight_color()
@@ -299,7 +351,7 @@ class TextBox(Form):
         self.lines = text.split('\n')
 
     def display(self):
-        super().display(self.pos)
+        super().display()
         if self.as_marge:
             self.display_margin()
 
@@ -309,7 +361,7 @@ class TextBox(Form):
             x_marge, y_marge = center_text((self.dim[0],y_line), self.font['font'], line)
             if not self.centered:
                 x_marge = self.rs_marge_text
-            font_text = self.font['font'].render(line,True,self.TEXT_COLOR)
+            font_text = self.font['font'].render(line,True,self.text_color)
             self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+i*y_line+y_marge))
 
 class Delayed:
@@ -345,9 +397,9 @@ cursor_deco = Delayed(15)
 class InputText(Button):
     CURSOR_WIDTH = 2
     bool_cursor = True
-    def __init__(self, dim, pos, color, TEXT_COLOR=(0,0,0), centered=False, font=Font.f30,
+    def __init__(self, dim, pos, color=C.WHITE, text_color=(0,0,0), centered=False, font=Font.f30,
                     limit=None, cache=False, text='', scale_dim=True, scale_pos=True):
-        super().__init__(dim, color, pos, TEXT_COLOR=TEXT_COLOR, centered=centered, font=font, scale_dim=scale_dim, scale_pos=scale_pos)
+        super().__init__(dim, color, pos, text_color=text_color, centered=centered, font=font, scale_dim=scale_dim, scale_pos=scale_pos)
         self.active = False
         self.cursor_place = len(text)
         self.limit = limit # max char
@@ -530,12 +582,12 @@ class Interface:
         dim_px = [new_dim[0] - cls.dim.size[0], cls.dim.size[1]]
         if dim_px[0] > 0:
             pos = [cls.dim.size[0], 0]
-            cls.x_padding.set_dim_pos(dim_px, pos)
+            cls.x_padding.set_dim_pos(dim_px, pos, update_original=False)
         
         dim_py = [cls.dim.size[0], new_dim[1] - cls.dim.size[1]]
         if dim_px[1] > 0:
             pos = [0, cls.dim.size[1]]
-            cls.y_padding.set_dim_pos(dim_py, pos)
+            cls.y_padding.set_dim_pos(dim_py, pos, update_original=False)
 
         # resize font
         Font.set_dimfactor(scale_factor)
@@ -546,9 +598,7 @@ class Interface:
 
         # resize every objects
         for gui_obj in cls.gui_objects:
-            rs_pos = cls.dim.scale(gui_obj.ORI_POS)
-            rs_dim = cls.dim.scale(gui_obj.ORI_DIM)
-            gui_obj.set_dim_pos(rs_dim, rs_pos)
+            gui_obj.set_dim_pos(gui_obj.ORI_DIM, gui_obj.ORI_POS, scale_pos=True, scale_dim=True, update_original=False)
             
             # rezise existing fonts
             if hasattr(gui_obj, 'font'):
