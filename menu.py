@@ -19,12 +19,12 @@ class NewWindow:
         self.cadre = Cadre(self.dim, pos, C.WHITE,set_transparent=True)
         self.text_newwindow = TextBox((self.dim[0],80), pos, C.WHITE,'New Window')
         self.text_dim = TextBox((400,60), (pos[0]+200, pos[1] + 150), C.WHITE,
-                     "Enter window dimension", font=Font.f30)
-        self.input_x = InputText(DIM_INPDIM, (pos[0]+210, pos[1]+250),C.WHITE, limit=4)
-        self.input_y = InputText(DIM_INPDIM, (pos[0]+410, pos[1]+250),C.WHITE, limit=4)
-        self.text_name = TextBox((150,60), (pos[0]+100, pos[1] + 350), C.WHITE,'File name:', font=Font.f30)
+                     "Enter window dimension", font=Font.f(30))
+        self.input_x = InputText(DIM_INPDIM, (pos[0]+210, pos[1]+250),C.WHITE, text='1000', limit=4)
+        self.input_y = InputText(DIM_INPDIM, (pos[0]+410, pos[1]+250),C.WHITE, text='1000', limit=4)
+        self.text_name = TextBox((150,60), (pos[0]+100, pos[1] + 350), C.WHITE,'File name:', font=Font.f(30))
         self.input_name = InputText(DIM_INPNAME, (pos[0]+300, pos[1]+350),C.WHITE)
-        self.button_done = Button(DIM_BDONE, (pos[0]+650,pos[1]+500), C.LIGHT_BLUE,'Done',font=Font.f30)
+        self.button_done = Button(DIM_BDONE, (pos[0]+650,pos[1]+500), C.LIGHT_BLUE,'Done',font=Font.f(30))
 
     def react_events(self, events, pressed):
         self.input_x.run(events, pressed)
@@ -59,9 +59,9 @@ class CreatePy:
     state = 'wait'
     def __init__(self, dim, pos):
         self.cadre = Cadre(dim, pos,C.WHITE)
-        self.text_create = TextBox(DIM_INPNAME, (pos[0]+40, pos[1]+100), C.WHITE,'Create a python file?', font=Font.f30)
-        self.button_yes = Button(DIM_BDONE, (pos[0]+40, pos[1]+180), C.LIGHT_GREEN,'Yes', font=Font.f30)
-        self.button_no = Button(DIM_BDONE, (pos[0]+200, pos[1]+180), C.LIGHT_RED,'No', font=Font.f30)
+        self.text_create = TextBox(DIM_INPNAME, (pos[0]+40, pos[1]+100), C.WHITE,'Create a python file?', font=Font.f(30))
+        self.button_yes = Button(DIM_BDONE, (pos[0]+40, pos[1]+180), C.LIGHT_GREEN,'Yes', font=Font.f(30))
+        self.button_no = Button(DIM_BDONE, (pos[0]+200, pos[1]+180), C.LIGHT_RED,'No', font=Font.f(30))
     
     def display(self):
         self.cadre.display()

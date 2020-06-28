@@ -169,7 +169,7 @@ class ColorRange:
         # set new color
         self.color_view.set_color(color)
         # store color
-        self.chosen_color = color
+        self.chosen_color = list(color)
 
     def display(self):
         # update colors

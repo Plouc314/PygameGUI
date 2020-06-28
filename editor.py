@@ -26,19 +26,21 @@ class GuiObj(Button):
     changing_dim = False
     chan_dim_corner = None
     name = ''
-    fontname = 'f25'
-    color = 'default'
+    color = 'WHITE'
     is_draging = False
+    drag_delay = 3
+    delay = 0
     delta_pos = None # dif between mouse pos and topleft when draging
 
     def __init__(self, pos, color, objtype):
         # don't scale pos as it is the mouse pos
         super().__init__(DIM_DRAG, pos,color, scale_pos=False)
-        self.input_text = InputText(DIM_DRAG, pos, C.WHITE, font=Font.f25, centered=True, scale_pos=False)
+        self.input_text = InputText(DIM_DRAG, pos, C.WHITE, font=Font.f(25), centered=True, scale_pos=False)
         self.objtype = objtype
         self.selected = True
         self.SELECT_COLOR = C.BLUE
         self.set_corners_points()
+        self.color_choice = 'default' # store color choice way: default, text or range
 
         # color range
         self.ptr_pos = None
@@ -54,22 +56,22 @@ class GuiObj(Button):
 
     def set_corners_points(self):
         corner = Button(DIM_CORNER, (0,0), C.BLUE)
-        corner.MARGE_WIDTH = Interface.dim.E(3)
+        corner.MARGE_WIDTH = 3
         self.CTOPLEFT = corner
         self.CTOPLEFT.set_pos(self.TOPLEFT, center=True)
 
         corner = Button(DIM_CORNER, (0,0), C.BLUE)
-        corner.MARGE_WIDTH = Interface.dim.E(3)
+        corner.MARGE_WIDTH = 3
         self.CTOPRIGHT = corner
         self.CTOPRIGHT.set_pos(self.TOPRIGHT, center=True)
         
         corner = Button(DIM_CORNER, (0,0), C.BLUE)
-        corner.MARGE_WIDTH = Interface.dim.E(3)
+        corner.MARGE_WIDTH = 3
         self.CBOTTOMRIGHT = corner
         self.CBOTTOMRIGHT.set_pos(self.BOTTOMRIGHT, center=True)
 
         corner = Button(DIM_CORNER, (0,0), C.BLUE)
-        corner.MARGE_WIDTH = Interface.dim.E(3)
+        corner.MARGE_WIDTH = 3
         self.CBOTTOMLEFT = corner
         self.CBOTTOMLEFT.set_pos(self.BOTTOMLEFT, center=True)
 
@@ -97,10 +99,8 @@ class GuiObj(Button):
         self.input_text.set_dim_pos(dim, pos)
         self.set_corners_points()
         # change text in setting
-        Settings.input_coordx.set_text(str(pos[0]))
-        Settings.input_coordy.set_text(str(pos[1]))
-        Settings.input_dimx.set_text(str(dim[0]))
-        Settings.input_dimy.set_text(str(dim[1]))
+        Settings.set_pos(pos)
+        Settings.set_dim(dim)
 
     def set_select_color(self, color):
         self.SELECT_COLOR = color
@@ -128,6 +128,7 @@ class GuiObj(Button):
             for event in events:
                 if event.type == pygame.MOUSEBUTTONUP:
                     self.is_draging = False
+                    self.delay = 0 # reset delay
                     if self.changing_dim:
                         try:
                             self.set_new_dim_mouse()
@@ -147,9 +148,11 @@ class GuiObj(Button):
 
         # when draging: update pos
         if self.is_draging:
-            new_x = mouse_pos[0] - self.delta_pos[0]
-            new_y = mouse_pos[1] - self.delta_pos[1]
-            self.set_new_dim(self.dim, (new_x, new_y))
+            self.delay += 1
+            if self.delay >= self.drag_delay:
+                new_x = mouse_pos[0] - self.delta_pos[0]
+                new_y = mouse_pos[1] - self.delta_pos[1]
+                self.set_new_dim(self.dim, (new_x, new_y))
 
         if not self.as_change_dim: # bool value to avoid reselect instantly
             for i, cp in enumerate(self.corners_points):
@@ -168,7 +171,7 @@ class Editor:
     button_button = Button(DIM_TOOLS, (0, POS_TY+80), C.XLIGHT_GREY,'Button')
     button_input_text = Button(DIM_TOOLS, (0, POS_TY+160), C.XLIGHT_GREY,'InputText')
     button_cadre = Button(DIM_TOOLS, (0, POS_TY+240), C.XLIGHT_GREY,'Cadre')
-    button_done = Button(DIM_BDONE, (2800, 1400), C.LIGHT_BLUE,'Done',font=Font.f30)
+    button_done = Button(DIM_BDONE, (2800, 1400), C.LIGHT_BLUE,'Done',font=Font.f(30))
     drag_surf = None
     objs = []
     state = 'running'
@@ -235,8 +238,8 @@ class Editor:
         pos = gobj.get_real_pos()
         string += f'{pos[0]} {pos[1]}\n'
         string += gobj.input_text.content + '\n'
-        string += gobj.color + '\n'
-        string += gobj.fontname
+        string += str(gobj.color) + '\n' # can be either str or list
+        string += str(gobj.input_text.font['size'])
         return string
 
     @classmethod

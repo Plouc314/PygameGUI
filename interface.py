@@ -3,6 +3,8 @@ from pygame.locals import *
 
 pygame.init()
 
+warning_msg = 'interface.py - WARNING: '
+
 def mean(array):
     total = 0
     for v in array:
@@ -12,18 +14,24 @@ def mean(array):
 def center_text(dim_box, font, text):
     width, height = font.size(text)
     if width > dim_box[0] or height > dim_box[1]:
-        print('interface.py - WARNING: Dimension too small for text')
+        print(warning_msg + 'Dimension too small for text')
     
     x_marge = int((dim_box[0] - width)/2)
     y_marge = int((dim_box[1] - height)/2)
     return x_marge, y_marge
+
+def rl(arr):
+    arr = list(arr)
+    for i in range(len(arr)):
+        arr[i] = int(arr[i])
+    return arr
 
 class Delayer:
     '''
     Creates decorators,
 
     The decorated function should return True/False depending on whether or not it has been activated,
-    if true, creates a delay in order to be spammed.
+    if true, creates a delay in order to not be spammed.
     '''
     wait = 0
     delayed = False
@@ -73,7 +81,7 @@ class Dimension:
         '''Scaled dimension of the window'''
         return self.scale(self.WINDOW)
 
-    def scale(self, x, factor = None):
+    def scale(self, x, factor = None, floating_point=5):
         
         if factor:
             f = factor
@@ -83,19 +91,33 @@ class Dimension:
         if type(x) == list or type(x) == tuple:
             x = list(x)
             for i in range(len(x)):
-                x[i] = int(x[i]*f)
+                x[i] = round(x[i]*f, floating_point)
         else:
-            x = int(x*f)
+            x = round(x*f, floating_point)
         return x
 
-    def inv_scale(self, x):
-        return self.scale(x, factor=1/self.f)
+    def inv_scale(self, x, floating_point=5):
+        '''
+        Inverse the scale of the number: scale -> unscale
 
-    def E(self, x):
-        return round(x*self.f)
+        Arguments:
+            - floating_point : floating point of the unscaled number (to keep precision)
 
-fontname = 'Arial'
-font_factor = 1
+        '''
+        f = 1/self.f
+        if type(x) == list or type(x) == tuple:
+            x = list(x)
+            for i in range(len(x)):
+                x[i] = round(x[i]*f, floating_point)
+        else:
+            x = round(x*f, floating_point)
+        return x
+
+    def E(self, x, integer=True, fp=5):
+        if integer:
+            return int(x*self.f)
+        else:
+            return round(x*self.f, fp)
 
 class C:
     WHITE = (255,255,255)
@@ -117,20 +139,31 @@ class C:
     YELLOW = (253, 240, 49)
 
 class Font:
-    f25 =  {'size':25 , 'font':pygame.font.SysFont( fontname, 25)}
-    f30 =  {'size':30 , 'font':pygame.font.SysFont( fontname, 30)}
-    f50 =  {'size':50 , 'font':pygame.font.SysFont( fontname, 50)}
-    f70 =  {'size':70 , 'font':pygame.font.SysFont( fontname, 70)}
-    f100 = {'size':100, 'font':pygame.font.SysFont(fontname, 100)}
+    interface = None
+    fontname = 'Arial'
     @classmethod
-    def set_dimfactor(cls, factor):
-        cls.f25 =  {'size':25 , 'font':pygame.font.SysFont(fontname, round(factor*25 ))}
-        cls.f30 =  {'size':30 , 'font':pygame.font.SysFont(fontname, round(factor*30 ))}
-        cls.f50 =  {'size':50 , 'font':pygame.font.SysFont(fontname, round(factor*50 ))}
-        cls.f70 =  {'size':70 , 'font':pygame.font.SysFont(fontname, round(factor*70 ))}
-        cls.f100 = {'size':100, 'font':pygame.font.SysFont(fontname, round(factor*100))}
+    def f(cls, size):
+        '''Create a font of the given size: { 'size' :  size(int), 'font' :  pygame.font }'''
+        if cls.interface:
+            return {'size':size , 'font':pygame.font.SysFont(cls.fontname, cls.interface.dim.E(size))}
+        else:
+            return {'size':size , 'font':pygame.font.SysFont(cls.fontname, size)}
 
 class Form(pygame.sprite.Sprite):
+    '''
+    Base object of the module, extension of pygame Sprite/Surface
+
+    Form's dimension and position are auto rescaled when window is rescaled
+
+    Form can take either a color, in that case the Form's surface will be uni-color, or a custom surface
+
+    Methods:
+        - set_pos : set a new position for the object
+        - set_dim_pos : set new position and dimension, keep the same surface
+        - set_surf : set a new surface, can be a pygame surface or a numpy.ndarray
+        - set_color : when unicolor surface, set a new color
+        - on_it : return if the mouse is on the Form's surface
+    '''
     screen = None
     MARGE_WIDTH = 4
     rs_marge_width = 4
@@ -157,24 +190,25 @@ class Form(pygame.sprite.Sprite):
         Set the surface attribute
         
         Arguments:
-            surface : can be either a pygame.Surface or numpy.ndarray object, by default: uni-color surf
+            surface : can be either a pygame.Surface or numpy.ndarray object
+            note : if surface not specified, doesn't change anything
         '''
         try:
             if not surface:
                 # by default: create a uni-colored surface
                 self.surf_type = 'default'
-                self.surf = pygame.Surface(self.dim)
+                self.surf = pygame.Surface(rl(self.dim))
                 self.surf.fill(self.COLOR)
             else:
                 # if custom surface: keep a original surf to rescale properly
                 self.surf_type = 'custom'
                 self.ori_surf = surface
-                self.surf = pygame.transform.scale(surface, self.dim)
+                self.surf = pygame.transform.scale(surface, rl(self.dim))
         except ValueError:
             # numpy array
             self.surf_type = 'custom'
             self.ori_surf = pygame.surfarray.make_surface(surface)
-            self.surf = pygame.transform.scale(self.ori_surf, self.dim)
+            self.surf = pygame.transform.scale(self.ori_surf, rl(self.dim))
 
     def set_dim_attr(self, dim, scale=False, update_original=True, update_surf=True):
         if scale:
@@ -184,7 +218,7 @@ class Form(pygame.sprite.Sprite):
         else:
             self.dim = list(dim)
             if update_original:
-                self.ORI_DIM = self.dim_object.scale(dim, factor=1/self.dim_object.f)
+                self.ORI_DIM = self.dim_object.inv_scale(dim)
         
         if update_surf:
             self.rescale_surf()
@@ -197,9 +231,9 @@ class Form(pygame.sprite.Sprite):
         else:
             self.pos = list(pos)
             if update_original:
-                self.ORI_POS = self.dim_object.scale(pos, factor=1/self.dim_object.f)
+                self.ORI_POS = self.dim_object.inv_scale(pos)
 
-    def set_color(self, color, marge=False):
+    def set_color(self, color: tuple, marge=False):
         self.surf.fill(color)
         self.COLOR = color
         if marge:
@@ -225,10 +259,10 @@ class Form(pygame.sprite.Sprite):
             self.high_color = dark_color
 
     def display_margin(self):
-        pygame.draw.line(self.screen, self.MARGE_COLOR, self.TOPLEFT, self.TOPRIGHT, self.rs_marge_width)
-        pygame.draw.line(self.screen, self.MARGE_COLOR, self.TOPLEFT, self.BOTTOMLEFT, self.rs_marge_width)
-        pygame.draw.line(self.screen, self.MARGE_COLOR, self.TOPRIGHT, self.BOTTOMRIGHT, self.rs_marge_width)
-        pygame.draw.line(self.screen, self.MARGE_COLOR, self.BOTTOMLEFT, self.BOTTOMRIGHT, self.rs_marge_width)
+        pygame.draw.line(self.screen, self.MARGE_COLOR, rl(self.TOPLEFT),    rl(self.TOPRIGHT   ), self.rs_marge_width)
+        pygame.draw.line(self.screen, self.MARGE_COLOR, rl(self.TOPLEFT),    rl(self.BOTTOMLEFT ), self.rs_marge_width)
+        pygame.draw.line(self.screen, self.MARGE_COLOR, rl(self.TOPRIGHT),   rl(self.BOTTOMRIGHT), self.rs_marge_width)
+        pygame.draw.line(self.screen, self.MARGE_COLOR, rl(self.BOTTOMLEFT), rl(self.BOTTOMRIGHT), self.rs_marge_width)
 
     def display(self, pos=None, marge=False):
         '''Display form
@@ -238,13 +272,14 @@ class Form(pygame.sprite.Sprite):
             marge : if the marges are also displayed
         '''
         if pos:
-            self.screen.blit(self.surf, pos)
+            self.screen.blit(self.surf, rl(pos))
         else:
-            self.screen.blit(self.surf, self.pos)
+            self.screen.blit(self.surf, rl(self.pos))
         if marge:
             self.display_margin()
     
-    def on_it(self):    
+    def on_it(self):
+        '''Return if the mouse is on the surface'''
         mouse_pos = pygame.mouse.get_pos()
         if mouse_pos[0] > self.TOPLEFT[0] and mouse_pos[0] < self.TOPRIGHT[0]:
             if mouse_pos[1] > self.TOPLEFT[1] and mouse_pos[1] < self.BOTTOMLEFT[1]:
@@ -306,8 +341,15 @@ class Cadre(Form):
         self.set_corners()
         self.set_highlight_color()
         self.MARGE_COLOR = self.high_color
+        self.is_transparent = set_transparent
         if set_transparent:
             self.surf.set_colorkey(color)
+
+    def rescale_surf(self):
+        # overwrite rescale method to keep the cadre transparent when rescaling
+        super().rescale_surf()
+        if self.is_transparent:
+            self.surf.set_colorkey(self.COLOR)
 
     def display(self):
         super().display(self.pos)
@@ -315,7 +357,7 @@ class Cadre(Form):
 
 class Button(Form):
     def __init__(self, dim, pos, color=C.WHITE, text='', text_color=(0,0,0), 
-                    centered=True, font=Font.f50, surface=None, scale_dim=True, scale_pos=True, highlight=True):
+                    centered=True, font=Font.f(50), surface=None, scale_dim=True, scale_pos=True, highlight=True):
         
         super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos, surface=surface)
 
@@ -355,12 +397,12 @@ class Button(Form):
             if not self.centered:
                 x_marge = self.rs_marge_text
             font_text = self.font['font'].render(self.text,True,self.text_color)
-            self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+y_marge))
+            self.screen.blit(font_text,rl((self.pos[0]+x_marge,self.pos[1]+y_marge)))
 
 class TextBox(Form):
     
     def __init__(self, dim, pos, color=C.WHITE, text='', 
-                    text_color=(0,0,0), centered=True, font=Font.f50, marge=False, scale_dim=True, scale_pos=True):
+                    text_color=(0,0,0), centered=True, font=Font.f(50), marge=False, scale_dim=True, scale_pos=True):
         
         super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos)
         
@@ -391,32 +433,51 @@ class TextBox(Form):
             if not self.centered:
                 x_marge = self.rs_marge_text
             font_text = self.font['font'].render(line,True,self.text_color)
-            self.screen.blit(font_text,(self.pos[0]+x_marge,self.pos[1]+i*y_line+y_marge))
+            self.screen.blit(font_text,rl((self.pos[0]+x_marge,self.pos[1]+i*y_line+y_marge)))
 
 get_input_deco = Delayer(3)
 cursor_deco = Delayer(15)
 
 class InputText(Button):
+    '''
+    Get text input when triggered (clicked). Input text is stored in .content attribute
+
+    Arguments:
+        - text_color : color of the text
+        - centered : if the text is centered
+        - limit : the limit of character that can be entered
+        - cache : if the input is hidden (with $ )
+        - text : the text that is present at the beginning
+        - pretext : text that disapear when the surface is clicked
+    '''
     CURSOR_WIDTH = 2
     bool_cursor = True
-    def __init__(self, dim, pos, color=C.WHITE, text_color=(0,0,0), centered=False, font=Font.f30,
-                    limit=None, cache=False, text='', scale_dim=True, scale_pos=True):
+    # store decorators to be able to adjust delay in func of fps
+    input_deco = get_input_deco
+    cursor_deco = cursor_deco
+    def __init__(self, dim, pos, color=C.WHITE, text_color=(0,0,0), centered=False, font=Font.f(30),
+                    limit=None, cache=False, text='', scale_dim=True, scale_pos=True, pretext=None):
         super().__init__(dim, pos, color, text_color=text_color, centered=centered, font=font, scale_dim=scale_dim, scale_pos=scale_pos)
         self.active = False
         self.cursor_place = len(text)
         self.limit = limit # max char
         self.cache = cache # if true text -> ***
+        self.pretext = pretext # if something: add a text that disapear when active
         # text: text that is display
         # content: text that is input
-        self.set_text(text)
+        self.set_text(text, with_pretext=self.pretext)
     
-    def set_text(self, text):
+    def set_text(self, text, with_pretext=False):
+        text = str(text)
         self.content = text
         self.cursor_place = len(text)
-        if self.cache:
-            self.text = '$' * len(self.content)
+        if with_pretext:
+            self.text = self.pretext
         else:
-            self.text = self.content
+            if self.cache:
+                self.text = '$' * len(self.content)
+            else:
+                self.text = self.content
 
     @get_input_deco
     def is_moving_left(self, pressed):
@@ -490,8 +551,8 @@ class InputText(Button):
         if not self.centered:
             x_marge = self.rs_marge_text
 
-        bottom_pos = (self.TOPLEFT[0] + x_marge + width, self.BOTTOMLEFT[1]-y_marge)
-        top_pos = (self.TOPLEFT[0] + x_marge + width, self.TOPLEFT[1]+y_marge)
+        bottom_pos = rl((self.TOPLEFT[0] + x_marge + width, self.BOTTOMLEFT[1]-y_marge))
+        top_pos = rl((self.TOPLEFT[0] + x_marge + width, self.TOPLEFT[1]+y_marge))
         
         if self.bool_cursor:
             pygame.draw.line(self.screen, C.BLACK, top_pos, bottom_pos, self.CURSOR_WIDTH)
@@ -505,6 +566,9 @@ class InputText(Button):
     def run(self, events, pressed):
         if self.pushed(events):
             self.active = True
+            # if pretext, remove pretext
+            if self.pretext:
+                self.set_text(self.content)
         
         if self.active:
             self.highlighted = True
@@ -513,13 +577,27 @@ class InputText(Button):
 
 
 class Interface:
+    '''
+    Manage the window and all the gui objects (Form, Button, ...), update the screen and mangae the fps.
+    The window always appear in fullscreen (to be fixed), the window can be resized and all objects will be rescaled auto.
+
+    Work with pygame, screen object store as an attribute. So can create own pygame object and add them to the Interface using .add_resizable_objects.
+
+    Must be setup (using .setup method) before be used.
+
+    Methods:
+        - add_resizable_objects : Add custom objects to be rescaled auto by Interface
+        - run : update the screen, get the input for current frame, check for quit events...
+
+
+    '''
     clock = pygame.time.Clock()
     running = True
     gui_objects = [] # all gui objects, ex: button, form...
     resize_objects = [] # must have a on_resize(self, factor) method
 
     @classmethod
-    def setup(cls, dim, win_title, FPS=30):
+    def setup(cls, dim: (int, int), win_title: str, FPS=30):
         '''
         Arguments:
             dim: default window dimension, used to set other object's dimension
@@ -531,7 +609,7 @@ class Interface:
         # create screen in full screen dimension: resize to specified dim
 
         infoObject = pygame.display.Info()
-        fullscreen_dim = cls.dim.scale((infoObject.current_w, infoObject.current_h), factor=.95)
+        fullscreen_dim = rl(cls.dim.scale((infoObject.current_w, infoObject.current_h), factor=.96))
 
         cls.screen = pygame.display.set_mode(fullscreen_dim, HWSURFACE|DOUBLEBUF|RESIZABLE)
         cls.screen.fill(C.WHITE)
@@ -539,10 +617,13 @@ class Interface:
 
         cls.FPS = FPS
 
+        # adjust InputText deco to fps
+        InputText.input_deco.delay = round(FPS/10) # 10 times a sec
+        InputText.cursor_deco.delay = round(FPS/2) # 2 times a sec
+
         cls.set_screen(cls.screen)
         Form.dim_object = cls.dim # set dimension to rescale pos, dim in Font.__init__
-        Form.rs_marge_width = cls.dim.E(Form.MARGE_WIDTH)
-        Form.rs_marge_text = cls.dim.E(Form.MARGE_TEXT)
+        Font.interface = cls # must be set this way as Interface is declared after Font
 
         cls.x_padding = Form((0,0),(0,0),C.WHITE, rescale=False)
         cls.y_padding = Form((0,0),(0,0),C.WHITE, rescale=False)
@@ -562,15 +643,19 @@ class Interface:
             gui_obj.screen = screen
 
     @classmethod
-    def add_resizable_objs(cls, objects):
+    def add_resizable_objs(cls, objects: list):
         '''Object's method on_rezise(self, scale_factor) will be called when window is rezised
         
         scale_factor: factor of dimension compared to initial dimension
         '''
-        cls.resize_objects.extend(objects)
         # resize a first time
         for obj in objects:
-            obj.on_resize(cls.dim.f)
+            # check that each object has a on_resize method, else: don't add obj to resizable ones
+            if hasattr(obj, 'on_resize'):
+                obj.on_resize(cls.dim.f)
+                cls.resize_objects.append(obj)
+            else:
+                print(warning_msg + 'resizable objects must have an on_resize(self, scale_factor) method')
 
     @classmethod
     def rescale(cls, new_dim):
@@ -590,9 +675,6 @@ class Interface:
         if dim_px[1] > 0:
             pos = [0, cls.dim.size[1]]
             cls.y_padding.set_dim_pos(dim_py, pos, update_original=False)
-
-        # resize font
-        Font.set_dimfactor(scale_factor)
         
         # resize marges
         Form.rs_marge_width = cls.dim.E(Form.MARGE_WIDTH)
@@ -605,7 +687,7 @@ class Interface:
             # rezise existing fonts
             if hasattr(gui_obj, 'font'):
                 fontsize = gui_obj.font['size']
-                gui_obj.font = getattr(Font,f'f{fontsize}')
+                gui_obj.font = Font.f(fontsize)
 
         for rz_obj in cls.resize_objects:
             rz_obj.on_resize(scale_factor)

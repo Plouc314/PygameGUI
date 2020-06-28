@@ -5,24 +5,40 @@ import pygame
 DIM_X = 400
 DIM_Y = 60
 POS_X = Interface.dim.x - 600
-
+POS_WIN = (600, 200)
 
 class Settings:
     activate = False
     text_name = TextBox((150, DIM_Y), (POS_X, 200), C.LIGHT_BLUE,
-                        'Name:',font=Font.f25)
-    input_name = InputText((250, DIM_Y), (POS_X+150,200), C.WHITE,font=Font.f25, limit=20)
-    text_coord = TextBox((100, DIM_Y), (POS_X, 260), C.LIGHT_BLUE,'pos',font=Font.f25)
-    input_coordx = InputText((150, DIM_Y), (POS_X+100, 260), C.WHITE,font=Font.f25)
-    input_coordy = InputText((150, DIM_Y), (POS_X+250, 260), C.WHITE,font=Font.f25)
-    text_dim = TextBox((100, DIM_Y), (POS_X, 320), C.LIGHT_BLUE, 'dim',font=Font.f25)
-    input_dimx = InputText((150, DIM_Y), (POS_X+100, 320), C.WHITE,font=Font.f25)
-    input_dimy = InputText((150, DIM_Y), (POS_X+250, 320), C.WHITE,font=Font.f25)
-    text_font = TextBox((200, DIM_Y), (POS_X, 380), C.LIGHT_BLUE, 'Fontsize:',font=Font.f25)
-    input_font = InputText((200, DIM_Y), (POS_X+200,380), C.WHITE, text='f25', font=Font.f25, limit=4)
-    text_color = TextBox((200, DIM_Y), (POS_X, 440), C.LIGHT_BLUE,'Color:',font=Font.f25)
-    input_color = InputText((200, DIM_Y), (POS_X+200, 440), C.WHITE, text='default',font=Font.f25) 
+                        'Name:',font=Font.f(25))
+    input_name = InputText((250, DIM_Y), (POS_X+150,200), C.WHITE,font=Font.f(25), limit=20)
+    text_coord = TextBox((100, DIM_Y), (POS_X, 260), C.LIGHT_BLUE,'pos',font=Font.f(25))
+    input_coordx = InputText((150, DIM_Y), (POS_X+100, 260), C.WHITE,font=Font.f(25))
+    input_coordy = InputText((150, DIM_Y), (POS_X+250, 260), C.WHITE,font=Font.f(25))
+    text_dim = TextBox((100, DIM_Y), (POS_X, 320), C.LIGHT_BLUE, 'dim',font=Font.f(25))
+    input_dimx = InputText((150, DIM_Y), (POS_X+100, 320), C.WHITE,font=Font.f(25))
+    input_dimy = InputText((150, DIM_Y), (POS_X+250, 320), C.WHITE,font=Font.f(25))
+    text_font = TextBox((200, DIM_Y), (POS_X, 380), C.LIGHT_BLUE, 'Fontsize:',font=Font.f(25))
+    input_font = InputText((200, DIM_Y), (POS_X+200,380), C.WHITE, text='25', font=Font.f(25), limit=4)
+    text_color = TextBox((200, DIM_Y), (POS_X, 440), C.LIGHT_BLUE,'Color:',font=Font.f(25))
+    input_color = InputText((200, DIM_Y), (POS_X+200, 440), C.WHITE, text='',font=Font.f(25), pretext='default...') 
     color_range = ColorRange((600, 330), (POS_X-100, 520))
+
+    @classmethod
+    def set_pos(cls, pos):
+        '''Update the position to have a unscaled relative position'''
+        pos = Interface.dim.inv_scale(pos) # keep precision
+        pos[0] -= POS_WIN[0]
+        pos[1] -= POS_WIN[1]
+        cls.input_coordx.set_text(f'{pos[0]:.1f}') # don't display all decimals
+        cls.input_coordy.set_text(f'{pos[1]:.1f}')
+
+    @classmethod
+    def set_dim(cls, dim):
+        '''Update the dimension to have unscaled dimension'''
+        dim = Interface.dim.inv_scale(dim)
+        cls.input_dimx.set_text(f'{dim[0]:.1f}') # don't display all decimals
+        cls.input_dimy.set_text(f'{dim[1]:.1f}')
 
     @classmethod
     def set_obj(cls, obj):
@@ -31,14 +47,25 @@ class Settings:
         cls.activate = True
         # set attr to input
         cls.input_name.set_text(cls.obj.name)
-        cls.input_font.set_text(cls.obj.fontname)
-        cls.input_color.set_text(cls.obj.color)
+        cls.input_font.set_text(cls.obj.input_text.font['size'])
+
+        # set inp color text: if with pretext or not
+        if cls.obj.color_choice == 'text':
+            cls.input_color.set_text(cls.obj.color)
+        elif cls.obj.color_choice == 'range':
+            # set custom as pretext
+            cls.input_color.pretext = 'custom...'
+            cls.input_color.set_text('', with_pretext=True)
+        else:
+            cls.input_color.pretext = 'default...'
+            cls.input_color.set_text('', with_pretext=True)
+        
         # pos
-        cls.input_coordx.set_text(str(cls.obj.pos[0]))
-        cls.input_coordy.set_text(str(cls.obj.pos[1]))
+        cls.set_pos(cls.obj.pos)
+        
         # dim
-        cls.input_dimx.set_text(str(cls.obj.dim[0]))
-        cls.input_dimy.set_text(str(cls.obj.dim[1]))
+        cls.set_dim(cls.obj.dim)
+
         # color range
         if cls.obj.ptr_pos and cls.obj.bptr_pos:
             cls.color_range.pointer.set_pos(cls.obj.ptr_pos, scale=True)
@@ -46,7 +73,7 @@ class Settings:
         else:
             # default pos
             cls.color_range.pointer.set_pos((POS_X, 620), scale=True)
-            cls.color_range.bar_pointer.set_pos((POS_X+268, 520), scale=True)
+            cls.color_range.bar_pointer.set_pos((POS_X+269, 520), scale=True)
         cls.color_range.set_color_range()
 
     @classmethod
@@ -61,13 +88,19 @@ class Settings:
         cls.obj.name = cls.input_name.content
         
         try:
-            dim = (int(cls.input_dimx.content), int(cls.input_dimy.content))
+            # scale dim
+            dim = (float(cls.input_dimx.content), float(cls.input_dimy.content))
+            dim = Interface.dim.scale(dim)
         except:
             print('Incorrect dim')
             dim = cls.obj.dim
         
         try:
-            pos = (int(cls.input_coordx.content), int(cls.input_coordy.content))
+            # scale pos
+            pos = [float(cls.input_coordx.content), float(cls.input_coordy.content)]
+            pos[0] += POS_WIN[0]
+            pos[1] += POS_WIN[1]
+            pos = Interface.dim.scale(pos)
         except:
             print('Incorrect pos')
             pos = cls.obj.pos
@@ -76,30 +109,34 @@ class Settings:
         
         # fontsize
         try:
-            font_str = cls.input_font.content
-            font = getattr(Font, font_str)
-            # try to center text -> avoid exception: Dimension too small for text
-            center_text(cls.obj.dim, font['font'], cls.obj.input_text.content)
+            font_size = int(cls.input_font.content)
+            font = Font.f(font_size)
             cls.obj.input_text.font = font
-            cls.obj.fontname = font_str
         except AttributeError:
             print('Incorrect font')
         
         # color
         try:
-            str_color = cls.input_color.content
+            # get text and not content !!! -> see if pretext or not
+            str_color = cls.input_color.text
             # check if still default
-            if 'default' in str_color.lower():
+            if str_color == 'default...':
                 color = C.WHITE
+                cls.obj.color = 'WHITE'
             else:
                 # try to set a predefined color
                 try:
                     color = getattr(C, str_color)
+                    cls.obj.color = str_color
+                    # store that color is chosen by text
+                    cls.obj.color_choice = 'text'
                 except AttributeError:
                     # get the color range color
                     color = cls.color_range.chosen_color
+                    cls.obj.color = color # in this case a tuple (and not str)
+                    cls.obj.color_choice = 'range'
+            
             cls.obj.input_text.set_color(color)
-            cls.obj.color = str_color
         except:
             print('Incorrect color')
         
