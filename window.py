@@ -10,7 +10,7 @@ def create_py_file(path):
     # get global infos
     global_infos = content[0].strip().replace('\n','').split(' ')
     win_name = global_infos[0]
-    dim_win = (int(global_infos[1]), int(global_infos[2]))
+    dim_win = (int(float(global_infos[1])), int(float(global_infos[2])))
 
     gobjs = []
 
@@ -26,9 +26,9 @@ def create_gobj(string):
     string = string.split('\n')[1:-1]
     if string:
         dim = string[2].split(' ')
-        dim = (int(dim[0]), int(dim[1]))
+        dim = (int(float(dim[0])), int(float(dim[1])))
         pos = string[3].split(' ')
-        pos = (int(pos[0]), int(pos[1]))
+        pos = (int(float(pos[0])), int(float(pos[1])))
 
         # check if color is str or tuple
         if string[5].find('[') == -1:

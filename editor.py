@@ -18,7 +18,7 @@ class DragSurf(Form):
     
     def run(self):
         pos = pygame.mouse.get_pos()
-        self.display(pos)
+        self.display(pos=pos)
 
 POS_X = Interface.dim.x - 600
 
