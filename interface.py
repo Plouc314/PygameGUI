@@ -1,3 +1,8 @@
+'''
+Interface is an extension to the pygame module, it is written to create GUI while still using raw pygame beside.
+The main features are: static object Interface, Form, TextBox, Button, InputText & Cadre
+'''
+
 import pygame
 from pygame.locals import *
 
@@ -129,6 +134,7 @@ class Dimension:
             return round(x*self.f, fp)
 
 class C:
+    '''Container of predefined colors'''
     WHITE = (255,255,255)
     BLACK = (0,0,0)
     LIGHT_BLUE = (135,206,250)
@@ -148,29 +154,30 @@ class C:
     YELLOW = (253, 240, 49)
 
 class Font:
+    '''Create pygame fonts, use .f method'''
     interface = None
     fontname = 'Arial'
     @classmethod
     def f(cls, size):
-        '''Create a font of the given size: { 'size' :  size(int), 'font' :  pygame.font }'''
+        '''Create a font of the given size: { 'size' :  size, 'font' :  pygame.font }'''
         if cls.interface:
             return {'size':size , 'font':pygame.font.SysFont(cls.fontname, cls.interface.dim.E(size))}
         else:
             return {'size':size , 'font':pygame.font.SysFont(cls.fontname, size)}
 
-class Form(pygame.sprite.Sprite):
+class Form:
     '''
-    Base object of the module, extension of pygame Sprite/Surface
+    Base object of the module, extension of pygame Surface object
 
     Form's dimension and position are auto rescaled when window is rescaled
 
-    Form can take either a color, in that case the Form's surface will be uni-color, or a custom surface
+    Form can take either a color, in that case the Form's surface will be uni-color, or a custom surface (can have a colored font)
 
     Methods:
         - set_pos : set a new position for the object
         - set_dim_pos : set new position and dimension, keep the same surface
         - set_surf : set a new surface, can be a pygame surface or a numpy.ndarray
-        - set_color : when unicolor surface, set a new color
+        - set_color : set a new color to uni-color surface or font
         - on_it : return if the mouse is on the Form's surface
     '''
     screen = None
@@ -179,8 +186,7 @@ class Form(pygame.sprite.Sprite):
     MARGE_TEXT = 5
     rs_marge_text = 5
     dim_object = None
-    def __init__(self, dim, pos, color=C.WHITE, *, rescale=True, scale_pos=True, scale_dim=True, surface=None, surf_font=None):
-        super().__init__()
+    def __init__(self, dim, pos, color=C.WHITE, *, rescale=True, scale_pos=True, scale_dim=True, surface=None, surf_font_color=None):
         
         self.set_dim_attr(dim, scale=scale_dim, update_surf=False)
         
@@ -188,13 +194,13 @@ class Form(pygame.sprite.Sprite):
         
         self.COLOR = color
     
-        self.set_surf(surface, surf_font=surf_font)
+        self.set_surf(surface, surf_font_color=surf_font_color)
         
         if rescale:
             # add every gui obj to interface to be able to rezise gui objs auto
             Interface.gui_objects.append(self)
 
-    def set_surf(self, surface=None, surf_font=None):
+    def set_surf(self, surface=None, surf_font_color:tuple = None):
         '''
         Set the surface attribute, 
         
@@ -202,6 +208,7 @@ class Form(pygame.sprite.Sprite):
         
         Arguments:
             surface : can be either a pygame.Surface or numpy.ndarray object
+            surf_font_color : if a custom surface is set & is partly transparent, surf_font color will fill the blanks
             note : if surface not specified, set a uni-color surface with the current COLOR attribute
         '''
 
@@ -228,13 +235,14 @@ class Form(pygame.sprite.Sprite):
         # if defined set font surfs
         self.surf['font'] = None
         self.surf['font color'] = None
-        if surf_font:
+        if surf_font_color:
+            self.surf['font'] = pygame.Surface(rl(self.dim))
             try:
-                self.surf['font'] = pygame.Surface(rl(self.dim))
-                self.surf['font'].fill(surf_font)
-                self.surf['font color'] = surf_font
+                self.surf['font'].fill(surf_font_color)
+                self.surf['font color'] = surf_font_color
             except:
                 print(warning_msg + "surf_font argument must be a tuple (color)")
+                self.surf['font'] = None # reset font
 
     def set_dim_attr(self, dim, *, scale=False, update_original=True, update_surf=True):
         if scale:
@@ -318,6 +326,7 @@ class Form(pygame.sprite.Sprite):
             pos : can specify position where the form is displayed
             marge : if the marges are also displayed
         '''
+
         if pos:
             pos = rl(pos)
         else:
@@ -425,16 +434,17 @@ class Button(Form):
         - centered : if the text is centered
         - highlight : if the surface is highlighted when the mouse pass on it
         - surface : can set a custom surface, can be an image, numpy.ndarray, pygame.Surface
+        - surf_font_color : if a custom surface is set & is partly transparent, surf_font color will fill the blanks
         - text : the text that is present at the beginning
     
     Methods:
-        - pushed : Return if the surf has been clicked
+        - pushed : Return if the surface has been clicked
         - display
     '''
     def __init__(self, dim, pos, color=C.WHITE, text='', *, text_color=C.BLACK, centered=True, font=Font.f(50), 
-                    surface=None, surf_font=None, scale_dim=True, scale_pos=True, highlight=True):
+                    surface=None, surf_font_color=None, scale_dim=True, scale_pos=True, highlight=True):
         
-        super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos, surface=surface, surf_font=surf_font)
+        super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos, surface=surface, surf_font_color=surf_font_color)
 
         self.text = text
         
@@ -447,30 +457,46 @@ class Button(Form):
         self.MARGE_COLOR = self.high_color
 
     def pushed(self, events):
+        '''Return True if the object was clicked'''
         if self.on_it():
             for event in events:
                 if event.type == pygame.MOUSEBUTTONUP:
                     return True
 
-    def highlight(self):        
+    def highlight(self):
+        '''
+        Set the highlight color on surf, if custom surf with font: set highlight on surf font
+        '''
         if self.on_it():
-            self.surf['main'].fill(self.high_color)
+            # check if custom surf & font or normal unicolor
+            if self.surf['type'] == 'custom':
+                if self.surf['font']: # check if has a font
+                    self.surf['font'].fill(self.high_color)
+                else:
+                    self.surf['main'].fill(self.high_color)
+            else:
+                self.surf['main'].fill(self.high_color)
         else:
             # check if custom surf
             if self.surf['type'] == 'custom':
-                self.surf['main'] = pygame.transform.scale(self.surf['original'], rl(self.dim))
+                if self.surf['font']: # check if has a font
+                    self.surf['font'].fill(self.surf['font color'])
+                else:
+                    self.surf['main'] = pygame.transform.scale(self.surf['original'], rl(self.dim))
             else:
                 self.surf['main'].fill(self.COLOR)
                 
     def display(self):
-        
+        # if highlight actived, handeln highlight color changes
         if self.highlighted:
             self.highlight()
         
+        # display the surf
         super().display()
         
         self.display_margin()
         
+        # dusplay the text with marges
         if self.text: # check that there is text
             x_marge, y_marge = center_text(self.dim, self.font['font'], self.text)
             if not self.centered:
@@ -546,7 +572,7 @@ class InputText(Button):
         - pretext : text that disapear when the surface is clicked
     
     Methods:
-        - pushed : Return if the surf has been clicked
+        - pushed : Return if the surface has been clicked
         - run : Get input ( execute once by frame )
         - display
     '''
@@ -690,10 +716,9 @@ class Interface:
     Must be setup (using .setup method) before be used.
 
     Methods:
+        - setup : Initialize the module, create the window
         - add_resizable_objects : Add custom objects to be rescaled auto by Interface
         - run : update the screen, get the input for current frame, check for quit events...
-
-
     '''
     clock = pygame.time.Clock()
     running = True
