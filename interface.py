@@ -1,5 +1,5 @@
 '''
-Interface is an extension to the pygame module, it is written to create GUI while still using raw pygame beside.
+Interface is an extension of the pygame module, it is written to create GUI while still using raw pygame beside.
 The main features are: static object Interface, Form, TextBox, Button, InputText & Cadre
 '''
 
@@ -95,7 +95,7 @@ class Dimension:
         '''Scaled dimension of the window'''
         return self.scale(self.WINDOW)
 
-    def scale(self, x, factor = None, floating_point=5):
+    def scale(self, x, factor = None, fp=None):
         
         if factor:
             f = factor
@@ -105,26 +105,26 @@ class Dimension:
         if type(x) == list or type(x) == tuple:
             x = list(x)
             for i in range(len(x)):
-                x[i] = round(x[i]*f, floating_point)
+                x[i] = round(x[i]*f, fp)
         else:
-            x = round(x*f, floating_point)
+            x = round(x*f, fp)
         return x
 
-    def inv_scale(self, x, floating_point=5):
+    def inv_scale(self, x, fp=5):
         '''
         Inverse the scale of the number: scale -> unscale ( note: unscale -> ?!@#@ )
 
         Arguments:
-            - floating_point : floating point of the unscaled number (to keep precision)
+            - fp : floating point of the unscaled number (to keep precision)
 
         '''
         f = 1/self.f
         if type(x) == list or type(x) == tuple:
             x = list(x)
             for i in range(len(x)):
-                x[i] = round(x[i]*f, floating_point)
+                x[i] = round(x[i]*f, fp)
         else:
-            x = round(x*f, floating_point)
+            x = round(x*f, fp)
         return x
 
     def E(self, x, *, integer=True, fp=5):
@@ -186,11 +186,11 @@ class Form:
     MARGE_TEXT = 5
     rs_marge_text = 5
     dim_object = None
-    def __init__(self, dim, pos, color=C.WHITE, *, rescale=True, scale_pos=True, scale_dim=True, surface=None, surf_font_color=None):
+    def __init__(self, dim, pos, color=C.WHITE, *, rescale=True, scale_pos=True, scale_dim=True, center=False, surface=None, surf_font_color=None):
         
         self.set_dim_attr(dim, scale=scale_dim, update_surf=False)
         
-        self.set_pos_attr(pos, scale=scale_pos)
+        self.set_pos(pos, scale=scale_pos, center=center)
         
         self.COLOR = color
     
@@ -218,9 +218,10 @@ class Form:
             if not surface:
                 # by default: create a uni-colored surface
                 self.surf['type'] = 'default'
-                self.surf['original'] = None
-                self.surf['main'] = pygame.Surface(rl(self.dim))
+                self.surf['original'] = pygame.Surface(rl(self.dim), pygame.SRCALPHA)
+                self.surf['main'] = pygame.Surface(rl(self.dim), pygame.SRCALPHA)
                 self.surf['main'].fill(self.COLOR)
+                self.surf['original'].fill(self.COLOR)
             else:
                 # if custom surface: keep a original surf to rescale properly
                 self.surf['type'] = 'custom'
@@ -231,7 +232,7 @@ class Form:
             self.surf['type'] = 'custom'
             self.surf['original'] = pygame.surfarray.make_surface(surface)
             self.surf['main'] = pygame.transform.scale(self.surf['original'], rl(self.dim))
-        
+
         # if defined set font surfs
         self.surf['font'] = None
         self.surf['font color'] = None
@@ -244,15 +245,47 @@ class Form:
                 print(warning_msg + "surf_font argument must be a tuple (color)")
                 self.surf['font'] = None # reset font
 
+    def rotate(self, angle: int, *, rotate_font=True):
+        '''
+        Rotate the surface of a given angle (degree)
+
+        Args: rotate_font: if a font as been specified, if it has to be rotated
+        '''
+        if angle == 0:
+            return # potential more efficient
+
+        new_main = pygame.transform.scale(self.surf['original'], rl(self.dim))
+
+        # get none rotated center
+        x1, y1 = new_main.get_rect().center
+
+        # rotate surf
+        self.surf['main'] = pygame.transform.rotate(new_main, angle)
+
+        # get rotated center
+        x2, y2 = self.surf['main'].get_rect().center
+        
+        # get deviation between the twos centers
+        dx = x2 - x1
+        dy = y2 - y1
+
+        # adjust position to patch deviation
+        self.set_pos([self.pos[0] - dx, self.pos[1] - dy])
+
+        if self.surf['font'] and rotate_font:
+            self.surf['font'] = pygame.transform.rotate(pygame.Surface(rl(self.dim), pygame.SRCALPHA), angle)
+            self.surf['font'].fill(self.surf['font color'])
+        
     def set_dim_attr(self, dim, *, scale=False, update_original=True, update_surf=True):
+        dim = list(dim)
         if scale:
             self.dim = self.dim_object.scale(dim)
             if update_original:
-                self.ORI_DIM = list(dim)
+                self.unscaled_dim = list(dim)
         else:
             self.dim = list(dim)
             if update_original:
-                self.ORI_DIM = self.dim_object.inv_scale(dim)
+                self.unscaled_dim = self.dim_object.inv_scale(dim)
         
         if update_surf:
             self.rescale_surf()
@@ -261,11 +294,11 @@ class Form:
         if scale:
             self.pos = self.dim_object.scale(pos)
             if update_original:
-                self.ORI_POS = list(pos)
+                self.unscaled_pos = list(pos)
         else:
             self.pos = list(pos)
             if update_original:
-                self.ORI_POS = self.dim_object.inv_scale(pos)
+                self.unscaled_pos = self.dim_object.inv_scale(pos)
 
     def set_color(self, color: tuple, *, marge=False):
         '''
@@ -355,6 +388,10 @@ class Form:
         self.BOTTOMLEFT = rl(self.pos[0], self.pos[1]+self.dim[1])
         self.BOTTOMRIGHT = rl(self.pos[0]+self.dim[0],self.pos[1]+self.dim[1])
 
+    @property
+    def center(self):
+        return [round(self.TOPLEFT[0] + self.dim[0]/2), round(self.TOPLEFT[1] + self.dim[1]/2)]
+
     def rescale_surf(self):
         '''Rescale the surf attribute to the current dimension'''
         
@@ -376,14 +413,14 @@ class Form:
             - center : if true, the form will be centered on the new pos, else the new pos is the top left of the obj
             - scale : if the position needs to be rescaled to the current window's dimension
         '''
+        pos = list(pos)
         if not center:
             self.set_pos_attr(pos, scale=scale)
             self.set_corners()
         else:
             if scale:
                 pos = self.dim_object.scale(pos)
-            else:
-                pos = list(pos)
+
             top_left = [int(pos[0]-self.dim[0]/2), int(pos[1]-self.dim[1]/2)]
             self.set_pos_attr(top_left)
             self.set_corners()
@@ -402,7 +439,7 @@ class Form:
         self.set_corners()
 
 class Cadre(Form):
-    def __init__(self, dim, pos, color=C.WHITE, *, set_transparent=False, scale_dim=True, scale_pos=True):
+    def __init__(self, dim, pos, color=C.WHITE, *, set_transparent=False, rescale=True, scale_dim=True, scale_pos=True):
         
         super().__init__(dim, pos, color, scale_dim=scale_dim, scale_pos=scale_pos)
         
@@ -726,7 +763,7 @@ class Interface:
     resize_objects = [] # must have a on_resize(self, factor) method
 
     @classmethod
-    def setup(cls, dim: (int, int), win_title: str, FPS=30):
+    def setup(cls, dim: (int, int), win_title: str, *, FPS=30, font_color=C.WHITE):
         '''
         Arguments:
             dim: default window dimension, used to set other object's dimension
@@ -734,6 +771,7 @@ class Interface:
         
         # create dimension
         cls.dim = Dimension(dim, 1)
+        cls.font_color = font_color
         
         # create screen in full screen dimension: resize to specified dim
 
@@ -741,7 +779,7 @@ class Interface:
         fullscreen_dim = rl(cls.dim.scale((infoObject.current_w, infoObject.current_h), factor=.96))
 
         cls.screen = pygame.display.set_mode(fullscreen_dim, HWSURFACE|DOUBLEBUF|RESIZABLE)
-        cls.screen.fill(C.WHITE)
+        cls.screen.fill(cls.font_color)
         pygame.display.set_caption(win_title)
 
         cls.FPS = FPS
@@ -754,8 +792,8 @@ class Interface:
         Form.dim_object = cls.dim # set dimension to rescale pos, dim in Font.__init__
         Font.interface = cls # must be set this way as Interface is declared after Font
 
-        cls.x_padding = Form((0,0),(0,0),C.WHITE, rescale=False)
-        cls.y_padding = Form((0,0),(0,0),C.WHITE, rescale=False)
+        cls.x_padding = Form((0,0),(0,0),cls.font_color, rescale=False)
+        cls.y_padding = Form((0,0),(0,0),cls.font_color, rescale=False)
 
         # rescale window to correct dim
         cls.rescale(fullscreen_dim)
@@ -812,7 +850,7 @@ class Interface:
 
         # resize every objects
         for gui_obj in cls.gui_objects:
-            gui_obj.set_dim_pos(gui_obj.ORI_DIM, gui_obj.ORI_POS, scale_pos=True, scale_dim=True, update_original=False)
+            gui_obj.set_dim_pos(gui_obj.unscaled_dim, gui_obj.unscaled_pos, scale_pos=True, scale_dim=True, update_original=False)
             
             # rezise existing fonts
             if hasattr(gui_obj, 'font'):
@@ -824,6 +862,13 @@ class Interface:
 
     @classmethod
     def run(cls, fill=True):
+        '''
+        Execute once a frame
+        Update the screen, get the input for current frame, check for quit events...
+        Return:
+            - pressed : pygame object
+            - events : pygame object
+        '''
         cls.x_padding.display()
         cls.y_padding.display()
         cls.clock.tick(cls.FPS)
@@ -831,7 +876,7 @@ class Interface:
         pygame.display.update()
 
         if fill:
-            cls.screen.fill(C.WHITE)
+            cls.screen.fill(cls.font_color)
 
         pressed = pygame.key.get_pressed()
         events = pygame.event.get()
@@ -851,133 +896,19 @@ class Interface:
 
         return pressed, events
 
-
 def get_pressed_key(pressed):
-    if pressed[pygame.K_a] and pressed[pygame.K_LSHIFT]:
-        return 'A'
-    elif pressed[pygame.K_b] and pressed[pygame.K_LSHIFT]:
-        return 'B'
-    elif pressed[pygame.K_c] and pressed[pygame.K_LSHIFT]:
-        return 'C'
-    elif pressed[pygame.K_d] and pressed[pygame.K_LSHIFT]:
-        return 'D'
-    elif pressed[pygame.K_e] and pressed[pygame.K_LSHIFT]:
-        return 'E'
-    elif pressed[pygame.K_f] and pressed[pygame.K_LSHIFT]:
-        return 'F'
-    elif pressed[pygame.K_g] and pressed[pygame.K_LSHIFT]:
-        return 'G'
-    elif pressed[pygame.K_h] and pressed[pygame.K_LSHIFT]:
-        return 'H'
-    elif pressed[pygame.K_i] and pressed[pygame.K_LSHIFT]:
-        return 'I'
-    elif pressed[pygame.K_j] and pressed[pygame.K_LSHIFT]:
-        return 'J'
-    elif pressed[pygame.K_k] and pressed[pygame.K_LSHIFT]:
-        return 'K'
-    elif pressed[pygame.K_l] and pressed[pygame.K_LSHIFT]:
-        return 'L'
-    elif pressed[pygame.K_m] and pressed[pygame.K_LSHIFT]:
-        return 'M'
-    elif pressed[pygame.K_n] and pressed[pygame.K_LSHIFT]:
-        return 'N'
-    elif pressed[pygame.K_o] and pressed[pygame.K_LSHIFT]:
-        return 'O'
-    elif pressed[pygame.K_p] and pressed[pygame.K_LSHIFT]:
-        return 'P'
-    elif pressed[pygame.K_q] and pressed[pygame.K_LSHIFT]:
-        return 'Q'
-    elif pressed[pygame.K_r] and pressed[pygame.K_LSHIFT]:
-        return 'R'
-    elif pressed[pygame.K_s] and pressed[pygame.K_LSHIFT]:
-        return 'S'
-    elif pressed[pygame.K_t] and pressed[pygame.K_LSHIFT]:
-        return 'T'
-    elif pressed[pygame.K_u] and pressed[pygame.K_LSHIFT]:
-        return 'U'
-    elif pressed[pygame.K_v] and pressed[pygame.K_LSHIFT]:
-        return 'V'
-    elif pressed[pygame.K_w] and pressed[pygame.K_LSHIFT]:
-        return 'W'
-    elif pressed[pygame.K_x] and pressed[pygame.K_LSHIFT]:
-        return 'X'
-    elif pressed[pygame.K_y] and pressed[pygame.K_LSHIFT]:
-        return 'Y'
-    elif pressed[pygame.K_z] and pressed[pygame.K_LSHIFT]:
-        return 'Z'
-    elif pressed[pygame.K_a]:
-        return 'a'
-    elif pressed[pygame.K_b]:
-        return 'b'
-    elif pressed[pygame.K_c]:
-        return 'c'
-    elif pressed[pygame.K_d]:
-        return 'd'    
-    elif pressed[pygame.K_e]:
-        return 'e'
-    elif pressed[pygame.K_f]:
-        return 'f'
-    elif pressed[pygame.K_g]:
-        return 'g'
-    elif pressed[pygame.K_h]:
-        return 'h'
-    elif pressed[pygame.K_i]:
-        return 'i'
-    elif pressed[pygame.K_j]:
-        return 'j'
-    elif pressed[pygame.K_k]:
-        return 'k'
-    elif pressed[pygame.K_l]:
-        return 'l'
-    elif pressed[pygame.K_m]:
-        return 'm'
-    elif pressed[pygame.K_n]:
-        return 'n'
-    elif pressed[pygame.K_o]:
-        return 'o'
-    elif pressed[pygame.K_p]:
-        return 'p'
-    elif pressed[pygame.K_q]:
-        return 'q'
-    elif pressed[pygame.K_r]:
-        return 'r'
-    elif pressed[pygame.K_s]:
-        return 's'
-    elif pressed[pygame.K_t]:
-        return 't'
-    elif pressed[pygame.K_u]:
-        return 'u'
-    elif pressed[pygame.K_v]:
-        return 'v'
-    elif pressed[pygame.K_w]:
-        return 'w'
-    elif pressed[pygame.K_x]:
-        return 'x'
-    elif pressed[pygame.K_y]:
-        return 'y'
-    elif pressed[pygame.K_z]:
-        return 'z'
-    elif pressed[pygame.K_1]:
-        return '1'
-    elif pressed[pygame.K_2]:
-        return '2'
-    elif pressed[pygame.K_3]:
-        return '3'
-    elif pressed[pygame.K_4]:
-        return '4'
-    elif pressed[pygame.K_5]:
-        return '5'
-    elif pressed[pygame.K_6]:
-        return '6'
-    elif pressed[pygame.K_7]:
-        return '7'
-    elif pressed[pygame.K_8]:
-        return '8'
-    elif pressed[pygame.K_9]:
-        return '9'
-    elif pressed[pygame.K_0]:
-        return '0'
-    elif pressed[pygame.K_SPACE]:
+    for i in range(97, 123):
+        if pressed[i]:
+            if pressed[pygame.K_LSHIFT]:
+                return chr(i).upper()
+            else:
+                return chr(i)
+    
+    for i in range(48, 58):
+        if pressed[i]:
+            return chr(i)
+    
+    if pressed[pygame.K_SPACE]:
         return ' '
     elif pressed[pygame.K_MINUS] and pressed[pygame.K_LSHIFT]:
         return '_'
